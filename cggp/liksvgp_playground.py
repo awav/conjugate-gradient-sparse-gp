@@ -39,6 +39,9 @@ def train_using_lbfgs(data, model, clustering_fn: Callable, max_num_iters: int):
     variables = model.trainable_variables
 
     def step_callback(*args, **kwargs):
+        # TODO(awav): This callback is called after every gradient step in L-BFGS
+        # Calling clustering every gradient step causes the convergence
+        # to a poor local minima.
         new_iv = clustering_fn()
         model.inducing_variable.Z.assign(new_iv)
 
