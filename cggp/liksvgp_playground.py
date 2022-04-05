@@ -107,6 +107,18 @@ if __name__ == "__main__":
     bottom_ax.fill_between(x_test.reshape(-1), up, down, color=bottom_color, alpha=0.3)
     bottom_ax.scatter(x, y, color=bottom_color, alpha=0.5)
 
+    # variational parameters
+    variational_mean = model.trainable_variables[0].numpy()
+    variational_errvar = np.exp(model.trainable_variables[1].numpy())
+    scaling_level = 1.96
+    variational_upper = variational_mean + scaling_level*variational_errvar
+    variational_lower = variational_mean - scaling_level*variational_errvar
+    bottom_ax.scatter(iv, variational_mean, color=colors)
+    for i in range(num_inducing_points):
+        bottom_ax.plot([iv[i][0], iv[i][0]], [variational_lower[i][0], variational_upper[i][0]], color = colors[i])
+
     plt.tight_layout()
+    plt.savefig('liksvgp.pdf') 
     plt.show()
+ 
 
