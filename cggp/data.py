@@ -6,7 +6,7 @@ from io import BytesIO
 import urllib.request
 
 
-def download_zip_file(outpath, url):
+def download_and_upzip_file(outpath, url):
     """Taken from https://stackoverflow.com/a/61195974 (modified)."""
 
     with urllib.request.urlopen(url) as response:
@@ -37,7 +37,7 @@ def snelson1d(target_dir: str = ".datasets/snelson1d"):
 
 
     if not (inputs_path.exists() and outputs_path.exists()):
-        download_zip_file(target_dir_path, data_url)
+        download_and_upzip_file(target_dir_path, data_url)
 
         dist_dir = Path(target_dir_path, "SPGP_dist")
         shutil.copy(Path(dist_dir, "train_inputs"), inputs_path)
@@ -45,7 +45,6 @@ def snelson1d(target_dir: str = ".datasets/snelson1d"):
 
         # Clean up everything else
         shutil.rmtree(dist_dir)
-        Path(target_dir_path, "SPGP_dist.zip").unlink()
 
     X = np.loadtxt(inputs_path)[:, None]
     Y = np.loadtxt(outputs_path)[:, None]
