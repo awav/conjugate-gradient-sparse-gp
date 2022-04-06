@@ -144,13 +144,23 @@ if __name__ == "__main__":
     )
     xt, _ = data
 
-    result = train_vanilla_using_lbfgs(data, model, clustering_fn, num_iterations)
-    # result = train_vanilla_using_lbfgs_and_standard_ip_update(
-    #     data, model, clustering_fn, num_iterations
-    # )
-    # result = train_using_lbfgs_and_varpar_update(
-    #     data, model, clustering_fn, num_iterations, distance_fn=distance_fn
-    # )
+    # Possible flags:
+    # train_flags = ["vanilla_lbfgs", "vanilla_lbfgs_ip_update", "lbfgs_variational_update"]
+    train_flag = "vanilla_lbfgs"
+
+    print(train_flag)
+    if train_flag == "vanilla_lbfgs":
+        result = train_vanilla_using_lbfgs(data, model, clustering_fn, num_iterations)
+    elif train_flag == "vanilla_lbfgs_ip_update":
+        result = train_vanilla_using_lbfgs_and_standard_ip_update(
+            data, model, clustering_fn, num_iterations
+        )
+    elif train_flag == "lbfgs_variational_update":
+        result = train_using_lbfgs_and_varpar_update(
+            data, model, clustering_fn, num_iterations, distance_fn=distance_fn
+        )
+    else:
+        print("No hyperparameter tuning!")
 
     # Plotting
     fig, (top_ax, bottom_ax) = plt.subplots(2, 1)
