@@ -14,7 +14,7 @@ def download_zip_file(outpath, url):
             zip_file.extractall(outpath)
 
 
-def snelson1d(target_dir: str = "~/.datasets/snelson1d"):
+def snelson1d(target_dir: str = ".datasets/snelson1d"):
     """
     Load Edward Snelson's 1d regression data set [@snelson2006fitc].
     It contains 200 examples of a few oscillations of an example function. It has

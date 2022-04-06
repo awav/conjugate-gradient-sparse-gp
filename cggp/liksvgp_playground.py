@@ -212,5 +212,6 @@ if __name__ == "__main__":
         )
 
     plt.tight_layout()
+    plt.savefig('liksvgp.pdf') 
     plt.show()
     print("end")
