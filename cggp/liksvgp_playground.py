@@ -1,4 +1,4 @@
-from typing import Callable, Optional
+from typing import Callable, Optional, TypeVar, Type
 from functools import partial
 from kmeans import (
     kmeans_lloyd,
@@ -6,7 +6,7 @@ from kmeans import (
     create_kernel_distance_fn,
     DistanceType,
 )
-from models import LpSVGP
+from models import LpSVGP, ClusterSVGP
 from data import snelson1d
 import matplotlib.pyplot as plt
 import gpflow
@@ -16,7 +16,12 @@ import numpy as np
 from gpflow.config import default_float
 
 
-def create_model(data, num_inducing_points: int, distance_type: DistanceType):
+ModelClass = TypeVar("ModelClass", type(LpSVGP), type(ClusterSVGP))
+
+
+def create_model(
+    data, num_inducing_points: int, distance_type: DistanceType, model_class: ModelClass
+):
     x, y = data
     xt = tf.convert_to_tensor(x, dtype=default_float())
     yt = tf.convert_to_tensor(y, dtype=default_float())
@@ -32,13 +37,17 @@ def create_model(data, num_inducing_points: int, distance_type: DistanceType):
 
     iv = clustering_fn()
 
-    model = LpSVGP(kernel, likelihood, iv)
+    model = model_class(kernel, likelihood, iv)
+
     gpflow.utilities.set_trainable(model.inducing_variable, False)
     return (xt, yt), model, clustering_fn, distance_fn
 
 
 def train_vanilla_using_lbfgs_and_standard_ip_update(
-    data, model, clustering_fn: Callable, max_num_iters: int
+    data,
+    model,
+    clustering_fn: Callable,
+    max_num_iters: int,
 ):
     lbfgs = gpflow.optimizers.Scipy()
     options = dict(maxiter=max_num_iters)
@@ -52,27 +61,34 @@ def train_vanilla_using_lbfgs_and_standard_ip_update(
         new_iv = clustering_fn()
         model.inducing_variable.Z.assign(new_iv)
 
+    use_jit = True
     result = lbfgs.minimize(
         loss_fn,
         variables,
         step_callback=step_callback,
-        compile=True,
+        compile=use_jit,
         options=options,
     )
 
     return result
 
 
-def train_vanilla_using_lbfgs(data, model, clustering_fn: Callable, max_num_iters: int):
+def train_vanilla_using_lbfgs(
+    data,
+    model,
+    clustering_fn: Callable,
+    max_num_iters: int,
+):
     lbfgs = gpflow.optimizers.Scipy()
     options = dict(maxiter=max_num_iters)
     loss_fn = model.training_loss_closure(data, compile=False)
     variables = model.trainable_variables
 
+    use_jit = True
     result = lbfgs.minimize(
         loss_fn,
         variables,
-        compile=True,
+        compile=use_jit,
         options=options,
     )
 
@@ -80,7 +96,11 @@ def train_vanilla_using_lbfgs(data, model, clustering_fn: Callable, max_num_iter
 
 
 def train_using_lbfgs_and_varpar_update(
-    data, model, clustering_fn: Callable, max_num_iters: int, distance_fn: Optional[Callable] = None
+    data,
+    model: ClusterSVGP,
+    clustering_fn: Callable,
+    max_num_iters: int,
+    distance_fn: Optional[Callable] = None,
 ):
     lbfgs = gpflow.optimizers.Scipy()
     options = dict(maxiter=max_num_iters)
@@ -105,18 +125,17 @@ def train_using_lbfgs_and_varpar_update(
         lambda_diag = sigma2 / counts
 
         model.inducing_variable.Z.assign(new_iv)
-        model.q_mu.assign(u)
-        model.q_var.assign(lambda_diag)
+        model.pseudo_u.assign(u)
+        model.diag_variance.assign(lambda_diag)
 
     gpflow.utilities.set_trainable(model.inducing_variable, False)
-    gpflow.utilities.set_trainable(model.q_mu, False)
-    gpflow.utilities.set_trainable(model.q_var, False)
     update_variational_parameters()
+    use_jit = False
     result = lbfgs.minimize(
         loss_fn,
         variables,
         step_callback=update_variational_parameters,
-        compile=True,
+        compile=use_jit,
         options=options,
     )
 
@@ -130,7 +149,7 @@ if __name__ == "__main__":
 
     (x, y), _ = snelson1d()
     distance_type = "covariance"
-    num_inducing_points = 10
+    num_inducing_points = 20
     num_iterations = 1000
 
     xmin = x.min() - 1.0
@@ -138,27 +157,26 @@ if __name__ == "__main__":
     num_test_points = 100
     x_test = np.linspace(xmin, xmax, num_test_points).reshape(-1, 1)
 
+    # NOTE:
     # Model setup
+    #   `model_class` switches between different models
+    #   as well as training procedures.
+    #   Available options are LpSVGP and ClusterSVGP.
+
+    # model_class = LpSVGP
+    model_class = ClusterSVGP
     data, model, clustering_fn, distance_fn = create_model(
-        (x, y), num_inducing_points, distance_type
+        (x, y),
+        num_inducing_points,
+        distance_type,
+        model_class,
     )
     xt, _ = data
 
-    # Possible flags:
-    # train_flags = ["vanilla_lbfgs", "vanilla_lbfgs_ip_update", "lbfgs_variational_update"]
-    train_flag = "vanilla_lbfgs"
-
-    print(train_flag)
-    if train_flag == "vanilla_lbfgs":
+    if model_class == LpSVGP:
         result = train_vanilla_using_lbfgs(data, model, clustering_fn, num_iterations)
-    elif train_flag == "vanilla_lbfgs_ip_update":
-        result = train_vanilla_using_lbfgs_and_standard_ip_update(
-            data, model, clustering_fn, num_iterations
-        )
-    elif train_flag == "lbfgs_variational_update":
-        result = train_using_lbfgs_and_varpar_update(
-            data, model, clustering_fn, num_iterations, distance_fn=distance_fn
-        )
+    elif model_class == ClusterSVGP:
+        result = train_using_lbfgs_and_varpar_update(data, model, clustering_fn, num_iterations)
     else:
         print("No hyperparameter tuning!")
 
@@ -177,7 +195,7 @@ if __name__ == "__main__":
         centroid_mask = indices == i
         x_plot = x[centroid_mask, :]
         y_plot = y[centroid_mask, :]
-        scatter = top_ax.scatter(x_plot, y_plot, s=8, alpha=0.5, color=color)
+        scatter = top_ax.scatter(x_plot, y_plot, s=8, alpha=0.8, color=color)
         top_ax.axvline(x=iv[i][0], color=color, linestyle="--")
 
     # Bottom plot
@@ -191,12 +209,12 @@ if __name__ == "__main__":
     gray = "gray"
     line = bottom_ax.plot(x_test, mu_test, color=gray)[0]
     bottom_color = line.get_color()
-    bottom_ax.fill_between(x_test.reshape(-1), up, down, color=bottom_color, alpha=0.3)
+    bottom_ax.fill_between(x_test.reshape(-1), up, down, color=bottom_color, alpha=0.5)
     bottom_ax.scatter(x, y, color=bottom_color, alpha=0.5, s=8)
 
     iv = model.inducing_variable.Z.numpy().reshape(-1)
-    variational_mean = model.q_mu.numpy().reshape(-1)
-    variational_variance = model.q_var.numpy().reshape(-1)
+    variational_mean, variational_variance = model.q_moments()
+    variational_mean = variational_mean.numpy()
     variational_std = np.sqrt(variational_variance)
     scale = 1.96
     variational_upper = variational_mean + scale * variational_std
@@ -208,10 +226,13 @@ if __name__ == "__main__":
         bottom_ax.scatter(x, variational_upper[i], color=color, marker="_")
         bottom_ax.scatter(x, variational_lower[i], color=color, marker="_")
         bottom_ax.plot(
-            [x, x], [variational_lower[i], variational_upper[i]], color=color, marker="_"
+            [x, x],
+            [variational_lower[i], variational_upper[i]],
+            color=color,
+            marker="_",
         )
 
     plt.tight_layout()
-    plt.savefig('liksvgp.pdf') 
+    plt.savefig("liksvgp.pdf")
     plt.show()
     print("end")
