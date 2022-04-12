@@ -190,6 +190,7 @@ if __name__ == "__main__":
     colors = plt.get_cmap(color_map)(np.arange(num_inducing_points, dtype=int))
 
     # Top plot
+    top_ax.set_xlim(x_test.min(), x_test.max())
     for i in range(num_inducing_points):
         color = colors[i]
         centroid_mask = indices == i
@@ -199,6 +200,7 @@ if __name__ == "__main__":
         top_ax.axvline(x=iv[i][0], color=color, linestyle="--")
 
     # Bottom plot
+    bottom_ax.set_xlim(x_test.min(), x_test.max())
     mu_test, var_test = model.predict_y(x_test)
     std_test = np.sqrt(var_test.numpy())
     mu_test = mu_test.numpy().reshape(-1)
