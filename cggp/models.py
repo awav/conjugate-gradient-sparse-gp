@@ -157,7 +157,7 @@ class ClusterSVGP(LpSVGP):
         K = add_diagonal(Kmm, var[:, 0])
         L = tf.linalg.cholesky(K)
 
-        KuuInv_u = tf.linalg.triangular_solve(K, pseudo_u)
+        KuuInv_u = tf.linalg.triangular_solve(L, pseudo_u)
         quad = tf.reduce_sum(pseudo_u * KuuInv_u)
 
         trace = tf.linalg.trace(tf.linalg.cholesky_solve(L, Kmm))
@@ -179,7 +179,7 @@ class ClusterSVGP(LpSVGP):
         var = self.diag_variance
         K = add_diagonal(Kmm, var[:, 0])
         L = tf.linalg.cholesky(K)
-        KuuInv_u = tf.linalg.triangular_solve(K, pseudo_u)
+        KuuInv_u = tf.linalg.triangular_solve(L, pseudo_u)
 
         A = tf.linalg.triangular_solve(L, Kmn)
 
