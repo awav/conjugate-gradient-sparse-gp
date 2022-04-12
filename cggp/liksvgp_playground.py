@@ -100,6 +100,7 @@ def train_using_lbfgs_and_varpar_update(
     model: ClusterSVGP,
     clustering_fn: Callable,
     max_num_iters: int,
+    outer_num_iters: int,
     distance_fn: Optional[Callable] = None,
 ):
     lbfgs = gpflow.optimizers.Scipy()
@@ -129,15 +130,17 @@ def train_using_lbfgs_and_varpar_update(
         model.diag_variance.assign(lambda_diag)
 
     gpflow.utilities.set_trainable(model.inducing_variable, False)
-    update_variational_parameters()
-    use_jit = False
-    result = lbfgs.minimize(
-        loss_fn,
-        variables,
-        step_callback=update_variational_parameters,
-        compile=use_jit,
-        options=options,
-    )
+    use_jit = True  # TODO(awav): resolve the problem with recompiling in Scipy
+
+    for _ in range(100):
+        update_variational_parameters()
+        result = lbfgs.minimize(
+            loss_fn,
+            variables,
+            # step_callback=update_variational_parameters,
+            compile=use_jit,
+            options=options,
+        )
 
     return result
 
@@ -174,11 +177,17 @@ if __name__ == "__main__":
     xt, _ = data
 
     if model_class == LpSVGP:
-        result = train_vanilla_using_lbfgs(data, model, clustering_fn, num_iterations)
+        opt_result = train_vanilla_using_lbfgs(data, model, clustering_fn, num_iterations)
     elif model_class == ClusterSVGP:
-        result = train_using_lbfgs_and_varpar_update(data, model, clustering_fn, num_iterations)
+        outer_num_iters = 100
+        opt_result = train_using_lbfgs_and_varpar_update(
+            data, model, clustering_fn, num_iterations, outer_num_iters
+        )
     else:
         print("No hyperparameter tuning!")
+
+    print("Optimization results: ")
+    print(opt_result)
 
     # Plotting
     fig, (top_ax, bottom_ax) = plt.subplots(2, 1)
