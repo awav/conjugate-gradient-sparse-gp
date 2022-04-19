@@ -2,6 +2,7 @@ import gpflow
 from typing import Callable, Literal, Optional, Tuple
 import numpy as np
 import tensorflow as tf
+import matplotlib.pyplot as plt
 
 Tensor = tf.Tensor
 DistanceType = Literal["Euclidean","covariance", "correlation"]
@@ -46,6 +47,7 @@ class OriginalCoverTreeNode:
         self.radius = radius
         self.parent = parent
         self.data = data.copy()
+        self.original_data = data.copy()
         self.children = []
 
 class OriginalCoverTree:
@@ -53,29 +55,44 @@ class OriginalCoverTree:
         self,
         distance: Callable,
         data,
-        minimum_radius: int,
+        minimum_radius: float,
     ):
         self.distance = distance
         self.root_node = None
         self.leaf_nodes = []
+        self.nodes = []
+        original_data = data
         
         point = data[0]
-        distances = self.distance(point, data)
+        distances = self.distance((point, data))
         radius = np.max(distances)
 
         node = OriginalCoverTreeNode(point, radius, None, data)
         self.root_node = node
+        self.nodes.append(node)
         
         while len(node.data) > 0:
+            plt.scatter(original_data[:, 0], original_data[:, 1], c='C1', marker='o')
+            plt.scatter(node.original_data[:, 0], node.original_data[:, 1], c= 'C2', marker = 'x')
+            plt.scatter(node.point[0], node.point[1], c='C3', marker = '+', s = 40)
+            circle = plt.Circle((node.point[0], node.point[1]), node.radius, color="blue", alpha=0.2)
+            ax = plt.gca()
+            plt.xlim([-0.5,1.5])
+            plt.ylim([-0.5,1.5])
+            ax.add_patch(circle)
+            plt.show()
+
             point = node.data[0]
-            distances = self.distance(point, node.data)
+            distances = self.distance((point, node.data))
             radius = node.radius / 2
-            data = node.data[distances <= radius]
-            if len(data) <= 1 or radius <= minimum_radius:
+            # import pdb; pdb.set_trace()
+            data = node.data[distances <= radius, :]
+            if len(data) <= 1: # or radius <= minimum_radius:
                 self.leaf_nodes.append(node)
                 node = node.parent
             else:
                 child = OriginalCoverTreeNode(point, radius, node, data)
+                self.nodes.append(child)
                 node.children.append(child)
-                node.data = node.data[distances > radius]
+                node.data = node.data[distances > radius, :].copy()
                 node = child
