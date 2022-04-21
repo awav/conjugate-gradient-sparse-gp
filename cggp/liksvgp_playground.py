@@ -132,15 +132,15 @@ def train_using_lbfgs_and_varpar_update(
     gpflow.utilities.set_trainable(model.inducing_variable, False)
     use_jit = True  # TODO(awav): resolve the problem with recompiling in Scipy
 
-    for _ in range(100):
-        update_variational_parameters()
-        result = lbfgs.minimize(
-            loss_fn,
-            variables,
-            # step_callback=update_variational_parameters,
-            compile=use_jit,
-            options=options,
-        )
+    # for _ in range(outer_num_iters):
+    update_variational_parameters()
+    result = lbfgs.minimize(
+        loss_fn,
+        variables,
+        step_callback=update_variational_parameters,
+        compile=use_jit,
+        options=options,
+    )
 
     return result
 
@@ -150,10 +150,12 @@ if __name__ == "__main__":
     np.random.seed(seed)
     tf.random.set_seed(seed)
 
-    (x, y), _ = snelson1d()
+    train_data, _ = snelson1d()
     distance_type = "covariance"
     num_inducing_points = 20
     num_iterations = 1000
+
+    x, y = train_data
 
     xmin = x.min() - 1.0
     xmax = x.max() + 1.0
@@ -168,7 +170,7 @@ if __name__ == "__main__":
 
     # model_class = LpSVGP
     model_class = ClusterSVGP
-    data, model, clustering_fn, distance_fn = create_model(
+    data, experimental_model, clustering_fn, distance_fn = create_model(
         (x, y),
         num_inducing_points,
         distance_type,
@@ -177,22 +179,27 @@ if __name__ == "__main__":
     xt, _ = data
 
     if model_class == LpSVGP:
-        opt_result = train_vanilla_using_lbfgs(data, model, clustering_fn, num_iterations)
+        opt_result = train_vanilla_using_lbfgs(
+            data, experimental_model, clustering_fn, num_iterations
+        )
     elif model_class == ClusterSVGP:
         outer_num_iters = 100
         opt_result = train_using_lbfgs_and_varpar_update(
-            data, model, clustering_fn, num_iterations, outer_num_iters
+            data, experimental_model, clustering_fn, num_iterations, outer_num_iters
         )
     else:
         print("No hyperparameter tuning!")
 
     print("Optimization results: ")
     print(opt_result)
+    
+    noise = experimental_model.likelihood.variance.numpy()
+    gpr_model = gpflow.models.GPR(train_data, kernel=kernel, noise_variance=noise)
 
     # Plotting
     fig, (top_ax, bottom_ax) = plt.subplots(2, 1)
 
-    iv = model.inducing_variable.Z.numpy()
+    iv = experimental_model.inducing_variable.Z.numpy()
     indices, _ = kmeans_indices_and_distances(iv, xt, distance_fn=distance_fn)
     indices = indices.numpy()
     color_map = "tab20c"
@@ -210,7 +217,12 @@ if __name__ == "__main__":
 
     # Bottom plot
     bottom_ax.set_xlim(x_test.min(), x_test.max())
-    mu_test, var_test = model.predict_y(x_test)
+    mu_test, var_test = experimental_model.predict_y(x_test)
+    gpr_mu_test, gpr_var_test = gpr_model.predict_y(x_test)
+
+    gpr_mu_test = gpr_mu_test.numpy().reshape(-1)
+    gpr_std_test = np.sqrt(gpr_var_test.numpy()).reshape(-1)
+
     std_test = np.sqrt(var_test.numpy())
     mu_test = mu_test.numpy().reshape(-1)
     std_test = std_test.reshape(-1)
@@ -223,8 +235,8 @@ if __name__ == "__main__":
     bottom_ax.fill_between(x_test.reshape(-1), up, down, color=bottom_color, alpha=0.5)
     bottom_ax.scatter(x, y, color=bottom_color, alpha=0.5, s=8)
 
-    iv = model.inducing_variable.Z.numpy().reshape(-1)
-    variational_mean, variational_variance = model.q_moments()
+    iv = experimental_model.inducing_variable.Z.numpy().reshape(-1)
+    variational_mean, variational_variance = experimental_model.q_moments()
     variational_mean = variational_mean.numpy()
     variational_std = np.sqrt(variational_variance)
     scale = 1.96
