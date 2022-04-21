@@ -1,3 +1,6 @@
+# Additional files and directories
+.datasets
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
