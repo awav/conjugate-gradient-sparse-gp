@@ -5,6 +5,7 @@ import gpflow
 from gpflow import Parameter
 from gpflow.utilities import positive
 from gpflow.config import default_float
+from utils import add_diagonal
 
 
 Tensor = tf.Tensor
@@ -194,11 +195,3 @@ class ClusterSVGP(LpSVGP):
         predict_var = fvar
         return predict_mu, predict_var
 
-
-def add_diagonal(matrix: Tensor, diagonal: Tensor):
-    """
-    Returns `matrix + diagional`, where `diagonal` is a vector of size math::`n`,
-    and `matrix` has shape math::`[n, n]`.
-    """
-    matrix_diag = tf.linalg.diag_part(matrix)
-    return tf.linalg.set_diag(matrix, matrix_diag + diagonal)
