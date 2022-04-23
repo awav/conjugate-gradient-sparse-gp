@@ -193,11 +193,12 @@ if __name__ == "__main__":
     print("Optimization results: ")
     print(opt_result)
     
+    kernel = experimental_model.kernel
     noise = experimental_model.likelihood.variance.numpy()
     gpr_model = gpflow.models.GPR(train_data, kernel=kernel, noise_variance=noise)
 
     # Plotting
-    fig, (top_ax, bottom_ax) = plt.subplots(2, 1)
+    fig, (ax1, ax2, ax3) = plt.subplots(3, 1)
 
     iv = experimental_model.inducing_variable.Z.numpy()
     indices, _ = kmeans_indices_and_distances(iv, xt, distance_fn=distance_fn)
@@ -205,23 +206,25 @@ if __name__ == "__main__":
     color_map = "tab20c"
     colors = plt.get_cmap(color_map)(np.arange(num_inducing_points, dtype=int))
 
-    # Top plot
-    top_ax.set_xlim(x_test.min(), x_test.max())
+    # Plot #1
+    ax1.set_xlim(x_test.min(), x_test.max())
     for i in range(num_inducing_points):
         color = colors[i]
         centroid_mask = indices == i
         x_plot = x[centroid_mask, :]
         y_plot = y[centroid_mask, :]
-        scatter = top_ax.scatter(x_plot, y_plot, s=8, alpha=0.8, color=color)
-        top_ax.axvline(x=iv[i][0], color=color, linestyle="--")
+        scatter = ax1.scatter(x_plot, y_plot, s=8, alpha=0.8, color=color)
+        ax1.axvline(x=iv[i][0], color=color, linestyle="--")
 
-    # Bottom plot
-    bottom_ax.set_xlim(x_test.min(), x_test.max())
+    # Plot #2
+    ax2.set_xlim(x_test.min(), x_test.max())
     mu_test, var_test = experimental_model.predict_y(x_test)
     gpr_mu_test, gpr_var_test = gpr_model.predict_y(x_test)
 
     gpr_mu_test = gpr_mu_test.numpy().reshape(-1)
     gpr_std_test = np.sqrt(gpr_var_test.numpy()).reshape(-1)
+    gpr_up = gpr_mu_test + gpr_std_test
+    gpr_down = gpr_mu_test - gpr_std_test
 
     std_test = np.sqrt(var_test.numpy())
     mu_test = mu_test.numpy().reshape(-1)
@@ -229,11 +232,12 @@ if __name__ == "__main__":
     up = mu_test + std_test
     down = mu_test - std_test
 
-    gray = "gray"
-    line = bottom_ax.plot(x_test, mu_test, color=gray)[0]
-    bottom_color = line.get_color()
-    bottom_ax.fill_between(x_test.reshape(-1), up, down, color=bottom_color, alpha=0.5)
-    bottom_ax.scatter(x, y, color=bottom_color, alpha=0.5, s=8)
+    blue = "tab:blue"
+    gray = "tab:gray"
+
+    ax2.plot(x_test, mu_test, color=gray)
+    ax2.fill_between(x_test.reshape(-1), up, down, color=gray, alpha=0.5)
+    ax2.scatter(x, y, color=gray, alpha=0.5, s=8)
 
     iv = experimental_model.inducing_variable.Z.numpy().reshape(-1)
     variational_mean, variational_variance = experimental_model.q_moments()
@@ -245,15 +249,26 @@ if __name__ == "__main__":
     for i in range(num_inducing_points):
         color = colors[i]
         x = iv[i]
-        bottom_ax.scatter(x, variational_mean[i], color=color, marker="o", s=5)
-        bottom_ax.scatter(x, variational_upper[i], color=color, marker="_")
-        bottom_ax.scatter(x, variational_lower[i], color=color, marker="_")
-        bottom_ax.plot(
+        ax2.scatter(x, variational_mean[i], color=color, marker="o", s=5)
+        ax2.scatter(x, variational_upper[i], color=color, marker="_")
+        ax2.scatter(x, variational_lower[i], color=color, marker="_")
+        ax2.plot(
             [x, x],
             [variational_lower[i], variational_upper[i]],
             color=color,
             marker="_",
         )
+    
+    # Plot #3
+
+    ax3.plot(x_test, gpr_mu_test, color=blue, label="GPR")
+    ax3.fill_between(x_test.reshape(-1), gpr_up, gpr_down, color=blue, alpha=0.2)
+
+    ax3.plot(x_test, mu_test, color=gray, label="GP with clustering")
+    ax3.fill_between(x_test.reshape(-1), up, down, color=gray, alpha=0.2)
+
+    ax3.scatter(x, y, color=gray, alpha=0.5, s=8)
+    ax3.legend()
 
     plt.tight_layout()
     plt.savefig("liksvgp.pdf")
