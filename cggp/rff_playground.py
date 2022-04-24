@@ -15,13 +15,14 @@ def samples_rff_plotting():
 
     num_bases = 100
     num_data = 1000
-    num_samples = 5
+    num_samples = 3
 
     lengthscale = 0.555
     variance = 0.333
 
-    # kernel_class = gpflow.kernels.SquaredExponential
-    kernel_class = gpflow.kernels.Matern32
+    kernel_class = gpflow.kernels.SquaredExponential
+    # kernel_class = gpflow.kernels.Matern32
+    # kernel_class = gpflow.kernels.Matern52
     kernel = kernel_class(
         lengthscales=[lengthscale],
         variance=variance,

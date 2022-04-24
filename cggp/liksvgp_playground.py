@@ -248,12 +248,12 @@ if __name__ == "__main__":
     variational_lower = variational_mean - scale * variational_std
     for i in range(num_inducing_points):
         color = colors[i]
-        x = iv[i]
-        ax2.scatter(x, variational_mean[i], color=color, marker="o", s=5)
-        ax2.scatter(x, variational_upper[i], color=color, marker="_")
-        ax2.scatter(x, variational_lower[i], color=color, marker="_")
+        z = iv[i]
+        ax2.scatter(z, variational_mean[i], color=color, marker="o", s=5)
+        ax2.scatter(z, variational_upper[i], color=color, marker="_")
+        ax2.scatter(z, variational_lower[i], color=color, marker="_")
         ax2.plot(
-            [x, x],
+            [z, z],
             [variational_lower[i], variational_upper[i]],
             color=color,
             marker="_",
@@ -264,7 +264,7 @@ if __name__ == "__main__":
     ax3.plot(x_test, gpr_mu_test, color=blue, label="GPR")
     ax3.fill_between(x_test.reshape(-1), gpr_up, gpr_down, color=blue, alpha=0.2)
 
-    ax3.plot(x_test, mu_test, color=gray, label="GP with clustering")
+    ax3.plot(x_test, mu_test, color=gray, label="GP clustering")
     ax3.fill_between(x_test.reshape(-1), up, down, color=gray, alpha=0.2)
 
     ax3.scatter(x, y, color=gray, alpha=0.5, s=8)
