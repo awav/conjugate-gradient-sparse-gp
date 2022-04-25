@@ -13,7 +13,7 @@ def samples_rff_plotting():
     np.random.seed(seed)
     tf.random.set_seed(seed)
 
-    num_bases = 1000
+    num_bases = 100000
     num_data = 1000
     num_samples = 3
 
@@ -21,9 +21,9 @@ def samples_rff_plotting():
     variance = 0.333
 
     # kernel_class = gpflow.kernels.SquaredExponential
-    # kernel_class = gpflow.kernels.Matern12
+    kernel_class = gpflow.kernels.Matern12
     # kernel_class = gpflow.kernels.Matern32
-    kernel_class = gpflow.kernels.Matern52
+    # kernel_class = gpflow.kernels.Matern52
     kernel = kernel_class(
         lengthscales=[lengthscale],
         variance=variance,
