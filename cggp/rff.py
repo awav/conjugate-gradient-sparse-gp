@@ -1,10 +1,7 @@
-from typing import Dict, Literal, Optional, Type, Union, Sequence
-import gpflow
+from typing import Dict, Literal, Type, Union, Sequence
 import tensorflow as tf
-import tensorflow_probability as tfp
 from tensorflow_probability import distributions as tfd
 
-from gpflow.base import DType
 from gpflow.kernels import SquaredExponential, Matern12, Matern32, Matern52
 
 Tensor = tf.Tensor
