@@ -78,7 +78,7 @@ def conjugate_gradient(
     stats_steps = final_state.i
     stats_error = 0.5 * final_state.rz
     solution = final_state.v
-    return tf.transpose(solution), (stats_steps, stats_error)
+    return solution, (stats_steps, stats_error)
 
 
 class CGPreconditioner:
