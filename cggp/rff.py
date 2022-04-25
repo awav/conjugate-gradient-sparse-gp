@@ -62,7 +62,7 @@ def rff_sample(inputs: Tensor, kernel: Kernel, num_bases: int, num_samples: int 
 
     theta = basis_theta_parameter(kernel, num_bases)
     bases = basis_vectors(inputs, theta=theta)
-    scale = tf.sqrt(tf.math.truediv(2.0 * variance, num_bases))
+    scale = tf.sqrt(tf.math.truediv(variance, num_bases))
     bases *= scale
 
     weigths_shape = (num_samples, bases.shape[-1])
