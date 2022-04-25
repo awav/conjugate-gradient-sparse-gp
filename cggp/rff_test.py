@@ -6,7 +6,7 @@ from rff import basis_vectors, basis_theta_parameter
 from gpflow.kernels import SquaredExponential, Matern52, Matern32
 
 
-@pytest.mark.parametrize("dimension,num_inputs,num_bases", [(2, 4, int(1e6))])
+@pytest.mark.parametrize("dimension,num_inputs,num_bases", [(2, 4, int(1e7))])
 @pytest.mark.parametrize("kernel_class", [SquaredExponential, Matern32, Matern52])
 def test_rff_kernel(dimension, num_inputs, num_bases, kernel_class):
     """
