@@ -6,12 +6,14 @@ from rff import basis_vectors, basis_theta_parameter
 from gpflow.kernels import RBF, Matern52, Matern12, Matern32
 
 
+dtype = tf.float64
+
 def test_rff_kernel(dimension, num_inputs, num_bases, kernel):
     x_values = np.random.randn(num_inputs, dimension)
     kxx = kernel(x_values)
     theta = basis_theta_parameter(kernel, num_bases=num_bases)
     basis_vs = basis_vectors(x_values, theta=theta)
-    scale_sq = tf.math.truediv(kernel.variance, tf.cast(num_bases, dtype=tf.float64)) 
+    scale_sq = tf.math.truediv(kernel.variance, tf.cast(num_bases, dtype=dtype)) 
     rff_approx = scale_sq * tf.matmul(basis_vs, basis_vs, transpose_b=True)
     return np.allclose(rff_approx, kxx, rtol=1e-3, atol=1e-2)
 

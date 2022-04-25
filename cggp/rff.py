@@ -65,8 +65,8 @@ def rff_sample(inputs: Tensor, kernel: Kernel, num_bases: int, num_samples: int 
     scale = tf.sqrt(tf.math.truediv(variance, num_bases))
     bases *= scale
 
-    weigths_shape = (num_samples, bases.shape[-1])
-    weights = tf.random.normal(weigths_shape, dtype=dtype)
+    weights_shape = (num_samples, bases.shape[-1])
+    weights = tf.random.normal(weights_shape, dtype=dtype)
     samples = tf.matmul(weights, bases, transpose_b=True)
 
     return samples
