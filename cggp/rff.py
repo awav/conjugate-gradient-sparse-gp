@@ -27,7 +27,8 @@ def basis_theta_parameter(kernel: Kernel, num_bases: int) -> Tensor:
     """
     matern_classes = [Matern12, Matern32, Matern52]
     kernel_class = kernel.__class__
-    lengthscale_inv = tf.math.reciprocal(kernel.lengthscales)
+    lengthscale = kernel.lengthscales
+    lengthscale_inv = tf.math.reciprocal(lengthscale)
     sample_shape = (num_bases,)
     # dimension = tf.size(lengthscale_inv)
 
@@ -62,11 +63,11 @@ def rff_sample(inputs: Tensor, kernel: Kernel, num_bases: int, num_samples: int 
 
     theta = basis_theta_parameter(kernel, num_bases)
     bases = basis_vectors(inputs, theta=theta)
-    scale = tf.sqrt(tf.math.truediv(2.0 * variance, num_bases))
+    scale = tf.sqrt(tf.math.truediv(variance, num_bases))
     bases *= scale
 
-    weigths_shape = (num_samples, bases.shape[-1])
-    weights = tf.random.normal(weigths_shape, dtype=dtype)
+    weights_shape = (num_samples, bases.shape[-1])
+    weights = tf.random.normal(weights_shape, dtype=dtype)
     samples = tf.matmul(weights, bases, transpose_b=True)
 
     return samples
@@ -81,7 +82,10 @@ def sample_mvn(scale_diag: Tensor, sample_shape: Shape) -> Tensor:
 def sample_student_t(nu: Tensor, scale_diag: Tensor, sample_shape: Shape) -> Tensor:
     mvn_sample = sample_mvn(scale_diag, sample_shape)
     alpha = beta = 0.5 * nu
-    gamma_distr = tfd.Gamma(alpha, beta)
-    gamma_sample = gamma_distr.sample(sample_shape)[:, None]
-    sample = tf.sqrt(tf.truediv(nu, gamma_sample)) * mvn_sample
+    # gamma_distr = tfd.Gamma(alpha, rate=beta)
+    # gamma_sample = gamma_distr.sample(sample_shape)[:, None]
+    # sample = tf.sqrt(nu / gamma_sample) * mvn_sample
+    chi2_distr = tfd.Chi2(nu)
+    chi2_sample = chi2_distr.sample(sample_shape)[:, None]
+    sample = tf.sqrt(nu / chi2_sample) * mvn_sample
     return sample
