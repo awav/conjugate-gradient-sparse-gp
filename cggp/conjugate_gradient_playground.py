@@ -13,7 +13,7 @@ def conjugate_gradient_playground():
     lengthscale = [0.333]
     variance = 0.555
     kernel = gpflow.kernels.Matern32(lengthscales=lengthscale, variance=variance)
-    n = 1000
+    n = 100
     m = n // 10
     x = np.linspace(1, m, n).reshape(-1, 1)
     y = np.cos(x) + 0.01 * np.random.randn(n, 1)
@@ -61,8 +61,12 @@ def conjugate_gradient_playground():
     ax1.scatter(x, y, alpha=0.25)
     ax1.plot(x_test, f_test)
 
+    for i in range(n):
+        ax2.plot(x_test, solution[i,0] * k_test[:,i], alpha=0.5)
     ax2.stem(x, solution, markerfmt=" ")
 
+    for i in range(n):
+        ax3.plot(x_test, solution_base[i,0] * k_test[:,i], alpha=0.5)
     ax3.stem(x, solution_base, markerfmt=" ")
 
     ax1.set_title("Data and regression curve")
