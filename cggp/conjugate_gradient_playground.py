@@ -10,11 +10,11 @@ def conjugate_gradient_playground():
     tf.random.set_seed(seed)
     np.random.seed(seed)
 
-    lengthscale = [0.333]
+    lengthscale = [0.2]
     variance = 0.555
-    kernel = gpflow.kernels.Matern32(lengthscales=lengthscale, variance=variance)
-    n = 100
-    m = n // 10
+    kernel = gpflow.kernels.RBF(lengthscales=lengthscale, variance=variance)
+    n = 50
+    m = 10
     x = np.linspace(1, m, n).reshape(-1, 1)
     y = np.cos(x) + 0.01 * np.random.randn(n, 1)
     y = y.T
@@ -55,11 +55,13 @@ def conjugate_gradient_playground():
 
     k_test = kernel(x_test, x)
     f_test = k_test @ solution
+    f_base_test = k_test @ solution_base
 
     figsize = (8, 12)
     fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=figsize)
     ax1.scatter(x, y, alpha=0.25)
-    ax1.plot(x_test, f_test)
+    ax1.plot(x_test, f_base_test, alpha=0.5)
+    ax1.plot(x_test, f_test, color="tab:blue")
 
     for i in range(n):
         ax2.plot(x_test, solution[i,0] * k_test[:,i], alpha=0.5)
@@ -70,10 +72,14 @@ def conjugate_gradient_playground():
     ax3.stem(x, solution_base, markerfmt=" ")
 
     ax1.set_title("Data and regression curve")
-    ax2.set_title("Canonical basis functions and weights")
-    ax1.set_ylabel("$f$")
+    ax2.set_title("CG canonical basis functions and weights")
+    ax3.set_title("Cholesky canonical basis functions and weights")
+    ax1.set_ylabel("$f$ and $y$")
+    ax2.set_ylabel("$v$ and $k(x,\cdot)$")
+    ax3.set_ylabel("$v$ and $k(x,\cdot)$")
     ax1.set_xlabel("$x$")
     ax2.set_xlabel("$x$")
+    ax3.set_xlabel("$x$")
     plt.tight_layout()
     plt.savefig("conjugate_gradient.pdf")
     plt.show()
