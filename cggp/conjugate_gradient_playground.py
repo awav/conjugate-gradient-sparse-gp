@@ -2,6 +2,7 @@ import numpy as np
 import gpflow
 import tensorflow as tf
 from conjugate_gradient import conjugate_gradient
+import matplotlib.pyplot as plt
 
 
 def conjugate_gradient_playground():
@@ -20,6 +21,9 @@ def conjugate_gradient_playground():
     initial_solution = np.random.rand(1, n)
     error_threshold = 0.01
     max_iterations = 1000
+
+    n_test = n * 10
+    x_test = np.linspace(x.min(), x.max(), n_test).reshape(-1, 1)
 
     kxx = kernel(x)
     kxx_eig_vals, kxx_eig_vecs = tf.linalg.eig(kxx)
@@ -48,6 +52,28 @@ def conjugate_gradient_playground():
 
     error = np.mean((solution_base - solution) ** 2)
     print(f"Error comparing to the 'ground truth' solver: {error:0.4f}")
+
+    k_test = kernel(x_test, x)
+    f_test = k_test @ solution
+
+    figsize = (8, 12)
+    fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=figsize)
+    ax1.scatter(x, y, alpha=0.25)
+    ax1.plot(x_test, f_test)
+
+    ax2.stem(x, solution, markerfmt=" ")
+
+    ax3.stem(x, solution_base, markerfmt=" ")
+
+    ax1.set_title("Data and regression curve")
+    ax2.set_title("Canonical basis functions and weights")
+    ax1.set_ylabel("$f$")
+    ax1.set_xlabel("$x$")
+    ax2.set_xlabel("$x$")
+    plt.tight_layout()
+    plt.savefig("conjugate_gradient.pdf")
+    plt.show()
+
     print()
 
 
