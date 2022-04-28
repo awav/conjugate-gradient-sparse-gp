@@ -11,7 +11,8 @@ def conjugate_gradient_playground():
 
     lengthscale = [0.333]
     variance = 0.555
-    kernel = gpflow.kernels.Matern32(lengthscales=lengthscale, variance=variance)
+    kernel = gpflow.kernels.SquaredExponential(lengthscales=lengthscale, variance=variance)
+    # kernel = gpflow.kernels.Matern32(lengthscales=lengthscale, variance=variance)
     n = 1000
     m = n // 10
     x = np.linspace(1, m, n).reshape(-1, 1)
@@ -22,14 +23,14 @@ def conjugate_gradient_playground():
     max_iterations = 1000
 
     kxx = kernel(x)
-    kxx_eig_vals, kxx_eig_vecs = tf.linalg.eig(kxx)
+    kxx_eig_vals, kxx_eig_vecs = tf.linalg.eigh(kxx)
     kxx_eig_vals = kxx_eig_vals.numpy().astype(np.float64)
     kxx_eig_vecs = kxx_eig_vecs.numpy().astype(np.float64)
 
     max_eig_val = kxx_eig_vals.max()
     min_eig_val = kxx_eig_vals.min()
     condition_number = max_eig_val / min_eig_val
-    print(f"Eigenvalues: min={min_eig_val}, max={max_eig_val}")
+    print(f"Eigenvalues: min={min_eig_val:0.4f}, max={max_eig_val:0.4f}")
     print(f"Condition number {condition_number:0.4f}")
 
     solution, stats = conjugate_gradient(kxx, y, initial_solution, error_threshold, max_iterations)
