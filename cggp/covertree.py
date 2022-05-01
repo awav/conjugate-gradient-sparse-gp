@@ -128,7 +128,7 @@ class ModifiedCoverTree:
                     point = active_data[0]
                     point_distances = self.distance((point, active_data))
                     point_neighborhood = active_data[point_distances <= radius, :]
-                    mean = point_neighborhood.mean(axis = -2)
+                    mean = (0.75 * point_neighborhood.mean(axis = -2)) + (0.25 * node.point)
                     mean_distances = self.distance((mean, active_data))
                     mean_idxs = mean_distances <= radius
                     mean_neighborhood = active_data[mean_idxs, :]
