@@ -10,7 +10,7 @@ def conjugate_gradient(
     rhs: Tensor,
     initial_solution: Tensor,
     error_threshold: float,
-    max_iterations: int,
+    max_iterations: Optional[int] = None,
     max_steps_cycle: int = 100,
     preconditioner: Optional[Callable] = None,
 ):
@@ -24,6 +24,9 @@ def conjugate_gradient(
         preconditioner: Precondition function. Default is `EyePreconditioner`.
         error_threshold:
     """
+
+    if max_iterations is None:
+        max_iterations = tf.shape(matrix)[0]
 
     preconditioner = EyePreconditioner() if preconditioner is None else preconditioner
 
@@ -71,7 +74,7 @@ def conjugate_gradient(
     r = b - vA
     z, rz = preconditioner(r)
     p = z
-    i = tf.constant(0, dtype=v.dtype)
+    i = tf.constant(0, dtype=tf.int32)
     initial_state = CGState(i, v, r, p, rz)
     final_state = tf.while_loop(stopping_condition, cg_step, [initial_state])
     final_state = tf.nest.map_structure(tf.stop_gradient, final_state)[0]
