@@ -19,11 +19,12 @@ def logdet_gradient_estimation():
         return gradient
 
     def gradient_logdet_cg(matrix):
-        threshold = 0.1
+        threshold = 1e-9
         dtype = matrix.dtype
         identity = tf.linalg.diag(tf.ones(matrix.shape[0], dtype=dtype))
         initial_solution = tf.zeros(matrix.shape, dtype=dtype)
         gradient, stats = conjugate_gradient(matrix, identity, initial_solution, threshold)
+        gradient = tf.transpose(gradient)
         return gradient, stats
     
     def gradient_logdet_solve(matrix):
@@ -77,6 +78,7 @@ def logdet_gradient_estimation():
     print(f"Conjugate gradient stopped with {cg_error}")
     print(f"Max eigenvalue: {max_eig_val}")
     print(f"Min eigenvalue: {min_eig_val}")
+    print(f"Condition number: {max_eig_val / min_eig_val}")
 
     print()
 

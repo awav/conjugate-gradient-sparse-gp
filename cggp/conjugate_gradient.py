@@ -49,11 +49,11 @@ def conjugate_gradient(
         rz: Tensor
 
     def stopping_condition(state):
-        return (0.5 * state.rz > error_threshold) and (state.i < max_iterations)
+        return (tf.reduce_any(0.5 * state.rz > error_threshold)) and (state.i < max_iterations)
 
     def cg_step(state):
         pA = state.p @ A
-        denom = tf.reduce_sum(state.p * pA, axis=-1)
+        denom = tf.reduce_sum(state.p * pA, axis=-1, keepdims=True)
         gamma = state.rz / denom
         v = state.v + gamma * state.p
         i = state.i + 1
@@ -93,4 +93,4 @@ class CGPreconditioner:
 class EyePreconditioner:
     @abc.abstractmethod
     def __call__(self, vec: Tensor) -> Tuple[Tensor, Tensor]:
-        return vec, tf.reduce_sum(tf.square(vec))
+        return vec, tf.reduce_sum(tf.square(vec), axis=-1, keepdims=True)
