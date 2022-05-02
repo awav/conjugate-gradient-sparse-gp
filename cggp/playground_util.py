@@ -22,7 +22,10 @@ def create_model(
     x, y = data
     xt = tf.convert_to_tensor(x, dtype=default_float())
     yt = tf.convert_to_tensor(y, dtype=default_float())
-    kernel = gpflow.kernels.SquaredExponential()
+
+    lengthscale = [1.0]
+    variance = 0.1
+    kernel = gpflow.kernels.SquaredExponential(variance=variance, lengthscales=lengthscale)
     likelihood = gpflow.likelihoods.Gaussian(variance=0.1)
 
     distance_fn = create_kernel_distance_fn(kernel, distance_type)
@@ -97,7 +100,6 @@ def train_using_lbfgs_and_varpar_update(
     model: ClusterSVGP,
     clustering_fn: Callable,
     max_num_iters: int,
-    outer_num_iters: int,
     distance_fn: Optional[Callable] = None,
 ):
     lbfgs = gpflow.optimizers.Scipy()
@@ -131,12 +133,13 @@ def train_using_lbfgs_and_varpar_update(
 
     # for _ in range(outer_num_iters):
     update_variational_parameters()
-    result = lbfgs.minimize(
-        loss_fn,
-        variables,
-        step_callback=update_variational_parameters,
-        compile=use_jit,
-        options=options,
-    )
-
-    return result
+    if max_num_iters > 0:
+        result = lbfgs.minimize(
+            loss_fn,
+            variables,
+            step_callback=update_variational_parameters,
+            compile=use_jit,
+            options=options,
+        )
+        return result
+    return None

@@ -55,7 +55,7 @@ if __name__ == "__main__":
     elif model_class == ClusterSVGP:
         outer_num_iters = 100
         opt_result = train_using_lbfgs_and_varpar_update(
-            data, experimental_model, clustering_fn, num_iterations, outer_num_iters
+            data, experimental_model, clustering_fn, num_iterations
         )
     else:
         print("No hyperparameter tuning!")

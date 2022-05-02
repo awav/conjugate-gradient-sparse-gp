@@ -81,8 +81,9 @@ def conjugate_gradient_playground():
     ax1.set_xlabel("$x$")
     ax2.set_xlabel("$x$")
     ax3.set_xlabel("$x$")
+
     plt.tight_layout()
-    plt.savefig("conjugate_gradient.pdf")
+    # plt.savefig("conjugate_gradient.pdf")
     plt.show()
 
     print()
