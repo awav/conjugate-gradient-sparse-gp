@@ -40,7 +40,7 @@ if __name__ == "__main__":
         model_class,
     )
 
-    num_iterations = 0
+    num_iterations = 100
     opt_res = train_using_lbfgs_and_varpar_update(
         data,
         experimental_model,
@@ -94,17 +94,17 @@ if __name__ == "__main__":
     ax.plot(x_test, samples, color="tab:blue")
     ax.plot(x_test, samples_expected, color="tab:orange")
 
-    # f_mu, f_var = experimental_model.predict_f(x_test)
-    # f_std = np.sqrt(f_var.numpy())
-    # f_mu = f_mu.numpy().reshape(-1)
-    # f_std = f_std.reshape(-1)
-    # up = f_mu + f_std
-    # down = f_mu - f_std
+    f_mu, f_var = experimental_model.predict_f(x_test)
+    f_std = np.sqrt(f_var.numpy())
+    f_mu = f_mu.numpy().reshape(-1)
+    f_std = f_std.reshape(-1)
+    up = f_mu + f_std
+    down = f_mu - f_std
 
-    # ax.plot(x_test, f_mu, color=gray)
-    # ax.fill_between(x_test.reshape(-1), up, down, color=gray, alpha=0.5)
+    ax.plot(x_test, f_mu, color=gray)
+    ax.fill_between(x_test.reshape(-1), up, down, color=gray, alpha=0.5)
 
-    # ax.scatter(x, y, color=gray, alpha=0.5, s=8)
+    ax.scatter(x, y, color=gray, alpha=0.5, s=8)
 
     plt.tight_layout()
     plt.show()
