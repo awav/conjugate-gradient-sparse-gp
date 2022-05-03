@@ -1,10 +1,8 @@
 from pathlib import Path
 from models import ClusterSVGP, PathwiseClusterSVGP
 from data import snelson1d
-import gpflow
 import tensorflow as tf
 import numpy as np
-from numpy import newaxis
 
 from playground_util import create_model, train_using_lbfgs_and_varpar_update
 
@@ -23,7 +21,7 @@ if __name__ == "__main__":
     distance_type = "covariance"
     num_inducing_points = 30
     num_iterations = 1000
-    num_bases = 123
+    num_bases = 1234
 
     x, y = train_data
 
@@ -61,7 +59,7 @@ if __name__ == "__main__":
     #######
     ## Test
 
-    num_samples = 17
+    num_samples = 1111
     likelihood = pathwise_model.compute_likelihood_term(
         data,
         num_bases=num_bases,
