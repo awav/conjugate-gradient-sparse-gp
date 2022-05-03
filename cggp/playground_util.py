@@ -1,3 +1,4 @@
+from ast import Call
 from typing import Callable, Optional, TypeVar
 from functools import partial
 from kmeans import (
@@ -95,6 +96,28 @@ def train_vanilla_using_lbfgs(
     return result
 
 
+def update_inducing_parameters(model, data, distance_fn: Optional[Callable], clustering_fn: Callable) -> None:
+    x, y = data
+    new_iv = clustering_fn()
+
+    m = new_iv.shape[0]
+    indices, _ = kmeans_indices_and_distances(new_iv, x, distance_fn=distance_fn)
+    range_indices = tf.range(m, dtype=indices.dtype)
+    counting_map = tf.cast(range_indices[:, None] == indices[None, :], tf.int32)
+    counts = tf.reduce_sum(counting_map, axis=1, keepdims=True)
+    counts = tf.cast(counts, dtype=new_iv.dtype)
+
+    u_init = tf.zeros([m, 1], dtype=new_iv.dtype)
+    update_indices = tf.reshape(indices, [-1, 1])
+    u = tf.tensor_scatter_nd_add(u_init, update_indices, y) / counts
+    sigma2 = model.likelihood.variance
+    lambda_diag = sigma2 / counts
+
+    model.inducing_variable.Z.assign(new_iv)
+    model.pseudo_u.assign(u)
+    model.diag_variance.assign(lambda_diag)
+
+
 def train_using_lbfgs_and_varpar_update(
     data,
     model: ClusterSVGP,
@@ -106,27 +129,9 @@ def train_using_lbfgs_and_varpar_update(
     options = dict(maxiter=max_num_iters)
     loss_fn = model.training_loss_closure(data, compile=False)
     variables = model.trainable_variables
-    x, y = data
 
     def update_variational_parameters(*args, **kwargs):
-        new_iv = clustering_fn()
-
-        m = new_iv.shape[0]
-        indices, _ = kmeans_indices_and_distances(new_iv, x, distance_fn=distance_fn)
-        range_indices = tf.range(m, dtype=indices.dtype)
-        counting_map = tf.cast(range_indices[:, None] == indices[None, :], tf.int32)
-        counts = tf.reduce_sum(counting_map, axis=1, keepdims=True)
-        counts = tf.cast(counts, dtype=new_iv.dtype)
-
-        u_init = tf.zeros([m, 1], dtype=new_iv.dtype)
-        update_indices = tf.reshape(indices, [-1, 1])
-        u = tf.tensor_scatter_nd_add(u_init, update_indices, y) / counts
-        sigma2 = model.likelihood.variance
-        lambda_diag = sigma2 / counts
-
-        model.inducing_variable.Z.assign(new_iv)
-        model.pseudo_u.assign(u)
-        model.diag_variance.assign(lambda_diag)
+        update_inducing_parameters(model, data, distance_fn, clustering_fn)
 
     gpflow.utilities.set_trainable(model.inducing_variable, False)
     use_jit = True  # TODO(awav): resolve the problem with recompiling in Scipy
