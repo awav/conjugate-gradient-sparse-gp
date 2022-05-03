@@ -10,7 +10,7 @@ def conjugate_gradient(
     rhs: Tensor,
     initial_solution: Tensor,
     error_threshold: float,
-    max_iterations: int,
+    max_iterations: Optional[int] = None,
     max_steps_cycle: int = 100,
     preconditioner: Optional[Callable] = None,
 ):
@@ -24,6 +24,9 @@ def conjugate_gradient(
         preconditioner: Precondition function. Default is `EyePreconditioner`.
         error_threshold:
     """
+
+    if max_iterations is None:
+        max_iterations = tf.shape(matrix)[0]
 
     preconditioner = EyePreconditioner() if preconditioner is None else preconditioner
 
@@ -46,11 +49,11 @@ def conjugate_gradient(
         rz: Tensor
 
     def stopping_condition(state):
-        return (0.5 * state.rz > error_threshold) and (state.i < max_iterations)
+        return (tf.reduce_any(0.5 * state.rz > error_threshold)) and (state.i < max_iterations)
 
     def cg_step(state):
         pA = state.p @ A
-        denom = tf.reduce_sum(state.p * pA, axis=-1)
+        denom = tf.reduce_sum(state.p * pA, axis=-1, keepdims=True)
         gamma = state.rz / denom
         v = state.v + gamma * state.p
         i = state.i + 1
@@ -71,7 +74,7 @@ def conjugate_gradient(
     r = b - vA
     z, rz = preconditioner(r)
     p = z
-    i = tf.constant(0, dtype=v.dtype)
+    i = tf.constant(0, dtype=tf.int32)
     initial_state = CGState(i, v, r, p, rz)
     final_state = tf.while_loop(stopping_condition, cg_step, [initial_state])
     final_state = tf.nest.map_structure(tf.stop_gradient, final_state)[0]
@@ -90,4 +93,4 @@ class CGPreconditioner:
 class EyePreconditioner:
     @abc.abstractmethod
     def __call__(self, vec: Tensor) -> Tuple[Tensor, Tensor]:
-        return vec, tf.reduce_sum(tf.square(vec))
+        return vec, tf.reduce_sum(tf.square(vec), axis=-1, keepdims=True)

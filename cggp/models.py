@@ -2,10 +2,13 @@ from typing import Tuple
 import numpy as np
 import tensorflow as tf
 import gpflow
+from tensorflow_probability import distributions as tfd
+from numpy import newaxis
 from gpflow import Parameter
 from gpflow.utilities import positive
 from gpflow.config import default_float
 from utils import add_diagonal
+from rff import rff_sample
 
 
 Tensor = tf.Tensor
@@ -97,10 +100,11 @@ class LpSVGP(gpflow.models.GPModel, gpflow.models.ExternalDataTrainingLossMixin)
         L = tf.linalg.cholesky(K)
         A = tf.linalg.triangular_solve(L, Kmn)
 
-        if not full_cov:
+        if full_cov:
             fvar = (Knn - tf.reduce_sum(tf.square(A), axis=0))[:, None]
         else:
             fvar = Knn - tf.matmul(A, A, transpose_a=True)
+            fvar = fvar[None, ...]
 
         fmu = tf.matmul(Kmn, nu, transpose_a=True)
 
@@ -132,6 +136,7 @@ class ClusterSVGP(LpSVGP):
         num_latent_gps: int = 1,
         diag_variance=None,
         num_data=None,
+        pseudo_u=None,
     ):
         assert num_latent_gps == 1, "One latent GP is allowed"
         super().__init__(
@@ -145,6 +150,10 @@ class ClusterSVGP(LpSVGP):
         )
         self.pseudo_u = self.nu  # Copy ν parameter into another name
         del self.nu
+
+        if pseudo_u is not None:
+            self.pseudo_u.assign(pseudo_u)
+
         gpflow.utilities.set_trainable(self.pseudo_u, False)
         gpflow.utilities.set_trainable(self.diag_variance, False)
 
@@ -188,6 +197,7 @@ class ClusterSVGP(LpSVGP):
             fvar = (Knn - tf.reduce_sum(tf.square(A), axis=0))[:, None]
         else:
             fvar = Knn - tf.matmul(A, A, transpose_a=True)
+            fvar = fvar[None, ...]
 
         fmu = tf.matmul(Kmn, KuuInv_u, transpose_a=True)
 
@@ -195,3 +205,65 @@ class ClusterSVGP(LpSVGP):
         predict_var = fvar
         return predict_mu, predict_var
 
+
+class PathwiseClusterSVGP(ClusterSVGP):
+    def elbo(
+        self,
+        data: gpflow.base.RegressionData,
+        *,
+        num_bases: int = 1,
+        num_samples: int = 1,
+    ) -> Tensor:
+        """
+        This gives a variational bound on the model likelihood.
+        """
+        kl = self.prior_kl()
+        likelihood = self.compute_likelihood_term(data, num_bases, num_samples)
+        x, _ = data
+        scale = self.scale(tf.shape(x)[0], kl.dtype)
+        return likelihood * scale - kl
+
+    def compute_likelihood_term(
+        self,
+        data,
+        num_bases: int,
+        num_samples: int,
+    ) -> Tensor:
+        x, y = data
+        samples = self.pathwise_samples(x, num_samples, num_bases)
+        noise = self.likelihood.variance
+        noise_inv = tf.math.reciprocal(noise)
+        error_squared = tf.square(y[newaxis, ...] - samples)
+        likelihood = 0.5 * noise_inv * tf.reduce_sum(error_squared) / num_samples
+        return likelihood
+
+    def pathwise_samples(self, sample_at: Tensor, num_bases: int, num_samples: int) -> Tensor:
+        u = self.pseudo_u
+        iv = self.inducing_variable
+        kernel = self.kernel
+        lambda_diag = self.diag_variance[:, 0]
+
+        prior_at = tf.concat([sample_at, iv.Z], axis=0)
+        n = tf.shape(sample_at)[0]
+        prior_samples = rff_sample(prior_at, kernel, num_bases, num_samples)  # [S, N]
+        prior_samples = prior_samples[..., newaxis]  # [S, N + M, 1]
+        prior_fx = prior_samples[:, :n]  # [S, N, 1]
+        prior_fz = prior_samples[:, n:]  # [S, M, 1]
+
+        epsilon_mvn = tfd.MultivariateNormalDiag(scale_diag=lambda_diag)
+
+        ## \epsilon per sample or the same epsilon for all samples?
+        epsilon = epsilon_mvn.sample((num_samples,))[..., newaxis]
+        # epsilon = epsilon_mvn.sample((1, ))[..., newaxis]
+
+        kzz = gpflow.covariances.Kuu(iv, kernel, jitter=0.0)
+        kzx = gpflow.covariances.Kuf(iv, kernel, sample_at)
+        kzz_lambda = add_diagonal(kzz, lambda_diag)
+
+        solve_against = u[newaxis, ...] - prior_fz - epsilon
+        L = tf.linalg.cholesky(kzz_lambda)
+        weights = tf.linalg.cholesky_solve(L, solve_against)
+
+        correction_term = tf.matmul(kzx, weights, transpose_a=True)
+        samples = prior_fx + correction_term  # [S, N, 1]
+        return samples

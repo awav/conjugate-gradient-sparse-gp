@@ -46,7 +46,7 @@ def conjugate_gradient_playground():
 
     cg_steps, cg_error = stats
     cg_steps = cg_steps.numpy()
-    cg_error = cg_error.numpy()
+    cg_error = cg_error.numpy().squeeze()
 
     print(f"Conjugate gradient ran {cg_steps} iterations.")
     print(f"Conjugate gradient finished with {cg_error:0.4f} error.")
@@ -81,8 +81,9 @@ def conjugate_gradient_playground():
     ax1.set_xlabel("$x$")
     ax2.set_xlabel("$x$")
     ax3.set_xlabel("$x$")
+
     plt.tight_layout()
-    plt.savefig("conjugate_gradient.pdf")
+    # plt.savefig("conjugate_gradient.pdf")
     plt.show()
 
     print()
