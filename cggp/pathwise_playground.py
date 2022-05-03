@@ -1,11 +1,9 @@
 from pathlib import Path
 from models import ClusterSVGP, PathwiseClusterSVGP
 from data import snelson1d
-import gpflow
 import tensorflow as tf
 import numpy as np
 from numpy import newaxis
-from rff import rff_sample
 
 from playground_util import create_model, train_using_lbfgs_and_varpar_update
 
@@ -24,7 +22,7 @@ if __name__ == "__main__":
     distance_type = "covariance"
     num_inducing_points = 30
     num_iterations = 1000
-    num_bases = 4099*8
+    num_bases = 1234
 
     x, y = train_data
 
@@ -81,7 +79,7 @@ if __name__ == "__main__":
         expected_error_squared = y**2 - (2 * y * q_mu) + expected_f_sq
         return expected_error_squared
 
-    num_samples = 4111*2
+    num_samples = 2345
     samples = pathwise_model.pathwise_samples(x, num_samples, num_bases)
     q_mu_x, q_var_x = experimental_model.predict_f(xt)
 
@@ -95,7 +93,7 @@ if __name__ == "__main__":
 
 
 
-    num_samples = 4111*2
+    num_samples = 1111
     likelihood = pathwise_model.compute_likelihood_term(
         data,
         num_bases=num_bases,
@@ -127,7 +125,7 @@ if __name__ == "__main__":
     ###########
     ## Plotting
 
-    num_samples = 4127*3
+    num_samples = 3333
     samples = pathwise_model.pathwise_samples(x_test, num_bases, num_samples)
     samples_expected = experimental_model.predict_f_samples(x_test, num_samples=num_samples)
 
