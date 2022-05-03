@@ -2,7 +2,7 @@ import numpy as np
 import tensorflow as tf
 import pytest
 
-from rff import basis_vectors, basis_theta_parameter
+from rff import basis_vectors, basis_theta_parameter, rff_sample
 from gpflow.kernels import SquaredExponential, Matern52, Matern32
 
 
@@ -26,6 +26,26 @@ def test_rff_kernel(dimension, num_inputs, num_bases, kernel_class):
 
     kxx = kernel(inputs)
     np.testing.assert_allclose(rff_approx, kxx, rtol=1e-3, atol=1e-2)
+
+@pytest.mark.parametrize("dimension,num_inputs,num_bases,num_samples", [(2, 4, int(1e7), 4099)])
+@pytest.mark.parametrize("kernel_class", [SquaredExponential, Matern32, Matern52])
+def test_rff_sample(dimension, num_inputs, num_bases, num_samples, kernel_class):
+    """
+    Test sampling functions for RFF for RBF and Matern kernels.
+    Construct basis functions, and check that
+    phi phi.T -> Kxx
+    """
+    inputs = np.random.randn(num_inputs, dimension)
+    lengthscales = np.random.rand(dimension) ** 2 + 0.5
+    variance = 1.3
+    kernel = kernel_class(variance=variance, lengthscales=lengthscales)
+
+    theta = basis_theta_parameter(kernel, num_bases=num_bases)
+    f = rff_sample(inputs, kernel, num_bases, num_samples)
+    f_cov = np.cov(f, rowvar=False)
+
+    kxx = kernel(inputs)
+    np.testing.assert_array_equal(np.abs(f_cov - kxx) < 0.04, True)
 
 
 if __name__ == "__main__":

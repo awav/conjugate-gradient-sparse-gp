@@ -5,6 +5,7 @@ import gpflow
 import tensorflow as tf
 import numpy as np
 from numpy import newaxis
+from rff import rff_sample
 
 from playground_util import create_model, train_using_lbfgs_and_varpar_update
 
@@ -23,7 +24,7 @@ if __name__ == "__main__":
     distance_type = "covariance"
     num_inducing_points = 30
     num_iterations = 1000
-    num_bases = 123
+    num_bases = 4099*8
 
     x, y = train_data
 
@@ -61,16 +62,63 @@ if __name__ == "__main__":
     #######
     ## Test
 
-    num_samples = 17
+    np.testing.assert_allclose(experimental_model.likelihood.variance.numpy(), pathwise_model.likelihood.variance.numpy())
+
+    def compute_expectation_samples(
+        samples,
+        y,
+        ):
+        error_squared = tf.square(y[newaxis, ...] - samples)
+        expected_error_squared = tf.reduce_mean(error_squared, axis=0)
+        return expected_error_squared
+
+    def compute_expectation_analytic(
+        q_mu,
+        q_var,
+        y,
+        ):
+        expected_f_sq = q_var + q_mu**2
+        expected_error_squared = y**2 - (2 * y * q_mu) + expected_f_sq
+        return expected_error_squared
+
+    num_samples = 4111*2
+    samples = pathwise_model.pathwise_samples(x, num_samples, num_bases)
+    q_mu_x, q_var_x = experimental_model.predict_f(xt)
+
+    likelihood_samples = compute_expectation_samples(samples, y)
+    likelihood_analytic = compute_expectation_analytic(q_mu_x, q_var_x, y)
+
+    print(f"Expectation estimated: {likelihood_samples.numpy().sum()}")
+    print(f"Expectation analytic: {likelihood_analytic.numpy().sum()}")
+
+
+
+
+
+    num_samples = 4111*2
     likelihood = pathwise_model.compute_likelihood_term(
         data,
         num_bases=num_bases,
         num_samples=num_samples,
     )
 
+    def compute_expected_likelihood_term(
+        model,
+        q_mu,
+        q_var,
+        y
+        ):
+        
+        N = y.shape[0]
+        noise = model.likelihood.variance
+        noise_inv = tf.math.reciprocal(noise)
+        expected_error_squared = compute_expectation_analytic(q_mu, q_var, y)
+        likelihood_term = tf.reduce_sum(0.5 * noise_inv * expected_error_squared)
+        constant_term = N * 0.5 * tf.math.log(noise)
+        return likelihood_term + constant_term
+
     q_mu_x, q_var_x = experimental_model.predict_f(xt)
-    likelihoods = experimental_model.likelihood.variational_expectations(q_mu_x, q_var_x, yt)
-    likelihood_ground_truth = tf.reduce_sum(likelihoods)
+    likelihood_ground_truth = compute_expected_likelihood_term(experimental_model, q_mu_x, q_var_x, yt)
 
     print(f"Likelihood term estimated: {likelihood.numpy()}")
     print(f"Likelihood term expected: {likelihood_ground_truth.numpy()}")
@@ -79,7 +127,7 @@ if __name__ == "__main__":
     ###########
     ## Plotting
 
-    num_samples = 2
+    num_samples = 4127*3
     samples = pathwise_model.pathwise_samples(x_test, num_bases, num_samples)
     samples_expected = experimental_model.predict_f_samples(x_test, num_samples=num_samples)
 
@@ -91,8 +139,8 @@ if __name__ == "__main__":
     samples_expected = samples_expected.numpy().squeeze().T
 
     ax.set_xlim(x_test.min(), x_test.max())
-    ax.plot(x_test, samples, color="tab:blue")
-    ax.plot(x_test, samples_expected, color="tab:orange")
+    ax.plot(x_test, samples_expected, alpha=0.1, color="tab:orange")
+    ax.plot(x_test, samples, alpha=0.1, color="tab:blue")
 
     f_mu, f_var = experimental_model.predict_f(x_test)
     f_std = np.sqrt(f_var.numpy())
@@ -107,6 +155,7 @@ if __name__ == "__main__":
     ax.scatter(x, y, color=gray, alpha=0.5, s=8)
 
     plt.tight_layout()
+    plt.savefig("pathwise.pdf")
     plt.show()
 
     print()
