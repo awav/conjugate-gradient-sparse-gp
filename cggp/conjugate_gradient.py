@@ -1,4 +1,5 @@
 import abc
+from distutils.log import error
 from typing import Callable, NamedTuple, Optional, Tuple
 import tensorflow as tf
 
@@ -29,7 +30,6 @@ def conjugate_gradient(
         max_iterations = tf.shape(matrix)[0]
 
     preconditioner = EyePreconditioner() if preconditioner is None else preconditioner
-
 
     A = matrix
     v = initial_solution
@@ -94,3 +94,52 @@ class EyePreconditioner:
     @abc.abstractmethod
     def __call__(self, vec: Tensor) -> Tuple[Tensor, Tensor]:
         return vec, tf.reduce_sum(tf.square(vec), axis=-1, keepdims=True)
+
+
+class ConjugateGradient:
+    preconditioner: CGPreconditioner
+    error_threshold: Tensor
+    max_iterations: Optional[int]
+    max_steps_cycle: Optional[int]
+
+    def __init__(
+        self,
+        error_threshold: Tensor,
+        preconditioner: Optional[CGPreconditioner] = None,
+        max_iterations: Optional[int] = None,
+        max_steps_cycle: Optional[int] = None,
+    ):
+        self.error_threshold = error_threshold
+        if preconditioner is None:
+            preconditioner = EyePreconditioner()
+        self.preconditioner = preconditioner
+        self.max_iterations = max_iterations
+        self.max_steps_cycle = max_steps_cycle
+
+    def __call__(
+        self, matrix: Tensor, rhs: Tensor, initial_solution: Optional[Tensor] = None
+    ) -> Tensor:
+        if initial_solution is None:
+            initial_solution = tf.zeros_like(rhs)
+
+        max_iterations = self.max_iterations
+        if max_iterations is None:
+            max_iterations = tf.shape(matrix)[-1]
+
+        max_steps_cycle = self.max_steps_cycle
+        if max_steps_cycle is None:
+            max_steps_cycle = max_iterations + 1  # Make sure that we don't run in the end of CG
+
+        preconditioner = self.preconditioner
+
+        solution, stats = conjugate_gradient(
+            matrix,
+            rhs,
+            initial_solution,
+            self.error_threshold,
+            max_iterations,
+            max_steps_cycle,
+            preconditioner,
+        )
+
+        return solution

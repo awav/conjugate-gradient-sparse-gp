@@ -124,6 +124,7 @@ def train_using_lbfgs_and_varpar_update(
     clustering_fn: Callable,
     max_num_iters: int,
     distance_fn: Optional[Callable] = None,
+    use_jit: bool = True,
 ):
     lbfgs = gpflow.optimizers.Scipy()
     options = dict(maxiter=max_num_iters)
@@ -134,7 +135,6 @@ def train_using_lbfgs_and_varpar_update(
         update_inducing_parameters(model, data, distance_fn, clustering_fn)
 
     gpflow.utilities.set_trainable(model.inducing_variable, False)
-    use_jit = True  # TODO(awav): resolve the problem with recompiling in Scipy
 
     # for _ in range(outer_num_iters):
     update_variational_parameters()
