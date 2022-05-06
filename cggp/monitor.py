@@ -1,16 +1,17 @@
-from typing import Callable, Union, Dict
+from typing import Callable, Optional, Union, Dict
 from pathlib import Path
 from tensorboardX import SummaryWriter
 import numpy as np
 
 
 class Monitor:
-    def __init__(self, logdir: Union[Path, str], record_step: Union[int, None] = None):
+    __initial_iteration: int = 1
+
+    def __init__(self, logdir: Union[Path, str]):
         max_queue = 5
         flush_secs = 10
         self._logdir = logdir
-        self._iter: int = 0
-        self._record_step: Union[None, int] = record_step
+        self._iter: int = self.__initial_iteration
         self._writer = SummaryWriter(logdir=str(logdir), max_queue=max_queue, flush_secs=flush_secs)
         self._callbacks = {}
 
@@ -18,21 +19,21 @@ class Monitor:
     def writer(self) -> SummaryWriter:
         return self._writer
 
-    def add_callback(self, name: str, callback: Callable):
-        self._callbacks[name] = (callback, {})
+    def add_callback(self, name: str, callback: Callable, record_step: Optional[int] = None):
+        self._callbacks[name] = (callback, record_step, {})
 
     def reset(self):
-        self._iter = 0
+        self._iter = self.__initial_iteration
         self.writer.flush()
         callbacks = {}
-        for name, (cb, _) in self._callbacks.items():
-            callbacks[name] = (cb, {})
+        for name, (cb, record_step, _) in self._callbacks.items():
+            callbacks[name] = (cb, record_step, {})
         self._callbacks = callbacks
 
     def flush(self):
         self.writer.flush()
         logdir = self._logdir
-        for k, (_, v) in self._callbacks.items():
+        for k, (_, _, v) in self._callbacks.items():
             path = Path(logdir, f"{k}.logs.npy")
             store_logs(path, v)
 
@@ -44,7 +45,11 @@ class Monitor:
         self._iter += 1
 
     def _handle_callback(self, step: int, name: str):
-        cb, logs = self._callbacks[name]
+        cb, record_step, logs = self._callbacks[name]
+
+        if record_step is not None and step % record_step != 0:
+            return
+
         results = cb(step)
         for key, res in results.items():
             if isinstance(res, (list, np.ndarray)) and _len(res) > 1:

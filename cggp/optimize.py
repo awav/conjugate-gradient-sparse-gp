@@ -1,9 +1,11 @@
 from typing import Callable, Optional
 import tensorflow as tf
 import gpflow
+from gpflow.utilities import parameter_dict
 from kmeans import kmeans_indices_and_distances
 from models import ClusterGP
 from utils import jit
+from monitor import Monitor
 
 
 def update_inducing_parameters(
@@ -114,6 +116,34 @@ def train_using_lbfgs_and_update(
     return None
 
 
+def make_model_snapshot_callback(model):
+    def _callback(*args, **kwargs):
+        ks = {
+            f"kernel/{k.strip('.')}": v.numpy() for (k, v) in parameter_dict(model.kernel).items()
+        }
+        ls = {
+            f"likelihood/{k.strip('.')}": v.numpy()
+            for (k, v) in parameter_dict(model.likelihood).items()
+        }
+        return {**ks, **ls}
+
+    return _callback
+
+
+# def make_step_callback(model, data):
+#     loss_fn = model.training_loss_closure(data_iter, compile=False)
+
+#     def metrics_fn():
+#         yhat, _ = model.predict_y(batch)
+#         return tf.sqrt(tf.reduce_mean(tf.square(y - yhat)))
+
+#     def step_callback(step, *args):
+#         print(f"Step #{step}, lower={lower}, M={m}")
+#         return {}
+
+#     return step_callback
+
+
 def train_using_adam_and_update(
     data,
     model: ClusterGP,
@@ -122,7 +152,6 @@ def train_using_adam_and_update(
     batch_size: int,
     learning_rate: float,
     distance_fn: Optional[Callable] = None,
-    update_at_step: Optional[int] = None,
     use_jit: bool = True,
 ):
     n = data[0].shape[0]
@@ -145,7 +174,6 @@ def train_using_adam_and_update(
         update_inducing_parameters(model, data, distance_fn, clustering_fn)
 
     gpflow.utilities.set_trainable(model.inducing_variable, False)
-
     variables = model.trainable_variables
 
     @jit(use_jit)
@@ -154,7 +182,18 @@ def train_using_adam_and_update(
 
     update_variational_parameters()
 
+    monitor = create_monitor(model)
     iteration = 0
+    monitor(iteration)
+
     for iteration in range(iterations):
         optimize_step()
         update_variational_parameters()
+        monitor(iteration)
+
+
+def create_monitor(model) -> Monitor:
+    monitor = Monitor("./default_logdir")
+    param_callback = make_model_snapshot_callback(model)
+    monitor.add_callback("params", param_callback)
+    return monitor
