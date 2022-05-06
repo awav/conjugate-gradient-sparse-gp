@@ -7,6 +7,7 @@ from numpy import newaxis
 from gpflow import Parameter
 from gpflow.utilities import positive
 from gpflow.config import default_float
+
 from utils import add_diagonal
 from rff import rff_sample
 from conjugate_gradient import ConjugateGradient
@@ -126,7 +127,7 @@ class LpSVGP(gpflow.models.GPModel, gpflow.models.ExternalDataTrainingLossMixin)
         return self.predict_f(ip, full_cov=full_cov)
 
 
-class ClusterSVGP(LpSVGP):
+class ClusterGP(LpSVGP):
     def __init__(
         self,
         kernel,
@@ -207,13 +208,13 @@ class ClusterSVGP(LpSVGP):
         return predict_mu, predict_var
 
 
-class ClusterCGSVGP(ClusterSVGP):
+class CGGP(ClusterGP):
     def __init__(
         self, kernel, likelihood, inducing_variable, conjugate_gradient: ConjugateGradient, **kwargs
     ):
         super().__init__(kernel, likelihood, inducing_variable, **kwargs)
         self.conjugate_gradient = conjugate_gradient
-
+    
     def prior_kl(self) -> Tensor:
         kernel = self.kernel
         iv = self.inducing_variable
@@ -280,7 +281,7 @@ class ClusterCGSVGP(ClusterSVGP):
         return predict_mu, predict_var
 
 
-class PathwiseClusterSVGP(ClusterSVGP):
+class PathwiseClusterGP(ClusterGP):
     def elbo(
         self,
         data: gpflow.base.RegressionData,

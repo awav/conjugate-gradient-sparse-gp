@@ -1,17 +1,18 @@
-from kmeans import (
-    kmeans_indices_and_distances,
-)
-from models import LpSVGP, ClusterSVGP
+from kmeans import kmeans_indices_and_distances
+from models import ClusterGP, CGGP
+from conjugate_gradient import ConjugateGradient
 from data import snelson1d
 import matplotlib.pyplot as plt
 import gpflow
 import tensorflow as tf
 import numpy as np
 
-from playground_util import (
-    create_model,
-    train_vanilla_using_lbfgs,
-    train_using_lbfgs_and_varpar_update,
+from playground_util import create_model
+
+from optimize import (
+    update_inducing_parameters,
+    train_using_lbfgs_and_update,
+    train_using_adam_and_update,
 )
 
 
@@ -36,38 +37,65 @@ if __name__ == "__main__":
     # Model setup
     #   `model_class` switches between different models
     #   as well as training procedures.
-    #   Available options are LpSVGP and ClusterSVGP.
+    #   Available options are LpSVGP and ClusterGP.
 
     # model_class = LpSVGP
-    model_class = ClusterSVGP
+    # model_class = CGGP
+
+    def model_class(kernel, likelihood, iv):
+        error_threshold = 1e-3
+        conjugate_gradient = ConjugateGradient(error_threshold)
+        return CGGP(kernel, likelihood, iv, conjugate_gradient)
+
     data, experimental_model, clustering_fn, distance_fn = create_model(
         (x, y),
         num_inducing_points,
         distance_type,
         model_class,
     )
+
+    update_inducing_parameters(experimental_model, data, distance_fn, clustering_fn)
+
     xt, _ = data
 
-    if model_class == LpSVGP:
-        opt_result = train_vanilla_using_lbfgs(
-            data, experimental_model, clustering_fn, num_iterations
-        )
-    elif model_class == ClusterSVGP:
-        outer_num_iters = 100
-        opt_result = train_using_lbfgs_and_varpar_update(
-            data, experimental_model, clustering_fn, num_iterations
-        )
-    else:
-        print("No hyperparameter tuning!")
+    # opt_result = train_using_lbfgs_and_update(
+    #     data,
+    #     experimental_model,
+    #     clustering_fn,
+    #     num_iterations,
+    #     use_jit=False,
+    # )
+
+    num_iterations = 1000
+    batch_size = 25
+    learning_rate = 0.01
+    opt_result = train_using_adam_and_update(
+        data,
+        experimental_model,
+        clustering_fn,
+        num_iterations,
+        batch_size,
+        learning_rate,
+        use_jit=False,
+    )
 
     print("Optimization results: ")
     print(opt_result)
 
     kernel = experimental_model.kernel
     noise = experimental_model.likelihood.variance.numpy()
+
+    cluster_model = ClusterGP(
+        experimental_model.kernel,
+        experimental_model.likelihood,
+        experimental_model.inducing_variable,
+        pseudo_u=experimental_model.pseudo_u,
+        diag_variance=experimental_model.diag_variance,
+    )
+
     gpr_model = gpflow.models.GPR(train_data, kernel=kernel, noise_variance=noise)
 
-    # Plotting
+    # Plot #0
     fig, (ax1, ax2, ax3) = plt.subplots(3, 1)
 
     iv = experimental_model.inducing_variable.Z.numpy()
@@ -88,26 +116,31 @@ if __name__ == "__main__":
 
     # Plot #2
     ax2.set_xlim(x_test.min(), x_test.max())
+    x_test_flat = x_test.reshape(-1)
+
     mu_test, var_test = experimental_model.predict_y(x_test)
     gpr_mu_test, gpr_var_test = gpr_model.predict_y(x_test)
+    cluster_mu_test, cluster_var_test = cluster_model.predict_y(x_test)
 
-    gpr_mu_test = gpr_mu_test.numpy().reshape(-1)
-    gpr_std_test = np.sqrt(gpr_var_test.numpy()).reshape(-1)
-    gpr_up = gpr_mu_test + gpr_std_test
-    gpr_down = gpr_mu_test - gpr_std_test
+    def gen_mean_up_down(mu, var):
+        mu = mu.numpy().reshape(-1)
+        std = np.sqrt(var.numpy()).reshape(-1)
+        up = mu + std
+        down = mu - std
+        return mu, up, down
 
-    std_test = np.sqrt(var_test.numpy())
-    mu_test = mu_test.numpy().reshape(-1)
-    std_test = std_test.reshape(-1)
-    up = mu_test + std_test
-    down = mu_test - std_test
+    gpr_mu, gpr_up, gpr_down = gen_mean_up_down(gpr_mu_test, gpr_var_test)
+    cg_mu, cg_up, cg_down = gen_mean_up_down(mu_test, var_test)
+    cluster_mu, cluster_up, cluster_down = gen_mean_up_down(cluster_mu_test, cluster_var_test)
 
     blue = "tab:blue"
     gray = "tab:gray"
+    orange = "tab:orange"
 
     ax2.plot(x_test, mu_test, color=gray)
-    ax2.fill_between(x_test.reshape(-1), up, down, color=gray, alpha=0.5)
     ax2.scatter(x, y, color=gray, alpha=0.5, s=8)
+
+    ax2.fill_between(x_test_flat, cg_up, cg_down, color=gray, alpha=0.5)
 
     iv = experimental_model.inducing_variable.Z.numpy().reshape(-1)
     variational_mean, variational_variance = experimental_model.q_moments()
@@ -116,6 +149,7 @@ if __name__ == "__main__":
     scale = 1.96
     variational_upper = variational_mean + scale * variational_std
     variational_lower = variational_mean - scale * variational_std
+
     for i in range(num_inducing_points):
         color = colors[i]
         z = iv[i]
@@ -132,10 +166,13 @@ if __name__ == "__main__":
     # Plot #3
 
     ax3.plot(x_test, gpr_mu_test, color=blue, label="GPR")
-    ax3.fill_between(x_test.reshape(-1), gpr_up, gpr_down, color=blue, alpha=0.2)
+    ax3.fill_between(x_test_flat, gpr_up, gpr_down, color=blue, alpha=0.2)
 
-    ax3.plot(x_test, mu_test, color=gray, label="GP clustering")
-    ax3.fill_between(x_test.reshape(-1), up, down, color=gray, alpha=0.2)
+    ax3.plot(x_test, mu_test, color=gray, label="GP clustering (with CG)")
+    ax3.fill_between(x_test_flat, cg_up, cg_down, color=gray, alpha=0.2)
+
+    ax3.plot(x_test, cluster_mu_test, color=orange, label="GP clustering")
+    ax3.fill_between(x_test_flat, cluster_up, cluster_down, color=orange, alpha=0.2)
 
     ax3.scatter(x, y, color=gray, alpha=0.5, s=8)
     ax3.legend()

@@ -1,4 +1,3 @@
-from ast import Call
 from typing import Callable, Optional, TypeVar
 from functools import partial
 from kmeans import (
@@ -7,14 +6,14 @@ from kmeans import (
     create_kernel_distance_fn,
     DistanceType,
 )
-from models import LpSVGP, ClusterSVGP
+from models import LpSVGP, ClusterGP
 import gpflow
 import tensorflow as tf
 
 from gpflow.config import default_float
 
 
-ModelClass = TypeVar("ModelClass", type(LpSVGP), type(ClusterSVGP))
+ModelClass = TypeVar("ModelClass", type(LpSVGP), type(ClusterGP))
 
 
 def create_model(
@@ -43,108 +42,3 @@ def create_model(
     gpflow.utilities.set_trainable(model.inducing_variable, False)
     return (xt, yt), model, clustering_fn, distance_fn
 
-
-def train_vanilla_using_lbfgs_and_standard_ip_update(
-    data,
-    model,
-    clustering_fn: Callable,
-    max_num_iters: int,
-):
-    lbfgs = gpflow.optimizers.Scipy()
-    options = dict(maxiter=max_num_iters)
-    loss_fn = model.training_loss_closure(data, compile=False)
-    variables = model.trainable_variables
-
-    def step_callback(*args, **kwargs):
-        # TODO(awav): This callback is called after every gradient step in L-BFGS
-        # Calling clustering every gradient step causes the convergence
-        # to a poor local minima.
-        new_iv = clustering_fn()
-        model.inducing_variable.Z.assign(new_iv)
-
-    use_jit = True
-    result = lbfgs.minimize(
-        loss_fn,
-        variables,
-        step_callback=step_callback,
-        compile=use_jit,
-        options=options,
-    )
-
-    return result
-
-
-def train_vanilla_using_lbfgs(
-    data,
-    model,
-    clustering_fn: Callable,
-    max_num_iters: int,
-):
-    lbfgs = gpflow.optimizers.Scipy()
-    options = dict(maxiter=max_num_iters)
-    loss_fn = model.training_loss_closure(data, compile=False)
-    variables = model.trainable_variables
-
-    use_jit = True
-    result = lbfgs.minimize(
-        loss_fn,
-        variables,
-        compile=use_jit,
-        options=options,
-    )
-
-    return result
-
-
-def update_inducing_parameters(model, data, distance_fn: Optional[Callable], clustering_fn: Callable) -> None:
-    x, y = data
-    new_iv = clustering_fn()
-
-    m = new_iv.shape[0]
-    indices, _ = kmeans_indices_and_distances(new_iv, x, distance_fn=distance_fn)
-    range_indices = tf.range(m, dtype=indices.dtype)
-    counting_map = tf.cast(range_indices[:, None] == indices[None, :], tf.int32)
-    counts = tf.reduce_sum(counting_map, axis=1, keepdims=True)
-    counts = tf.cast(counts, dtype=new_iv.dtype)
-
-    u_init = tf.zeros([m, 1], dtype=new_iv.dtype)
-    update_indices = tf.reshape(indices, [-1, 1])
-    u = tf.tensor_scatter_nd_add(u_init, update_indices, y) / counts
-    sigma2 = model.likelihood.variance
-    lambda_diag = sigma2 / counts
-
-    model.inducing_variable.Z.assign(new_iv)
-    model.pseudo_u.assign(u)
-    model.diag_variance.assign(lambda_diag)
-
-
-def train_using_lbfgs_and_varpar_update(
-    data,
-    model: ClusterSVGP,
-    clustering_fn: Callable,
-    max_num_iters: int,
-    distance_fn: Optional[Callable] = None,
-    use_jit: bool = True,
-):
-    lbfgs = gpflow.optimizers.Scipy()
-    options = dict(maxiter=max_num_iters)
-    loss_fn = model.training_loss_closure(data, compile=False)
-    variables = model.trainable_variables
-
-    def update_variational_parameters(*args, **kwargs):
-        update_inducing_parameters(model, data, distance_fn, clustering_fn)
-
-    gpflow.utilities.set_trainable(model.inducing_variable, False)
-
-    # for _ in range(outer_num_iters):
-    update_variational_parameters()
-    if max_num_iters > 0:
-        result = lbfgs.minimize(
-            loss_fn,
-            variables,
-            step_callback=update_variational_parameters,
-            compile=use_jit,
-            options=options,
-        )
-        return result
-    return None

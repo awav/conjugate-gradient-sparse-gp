@@ -128,7 +128,7 @@ class ConjugateGradient:
 
         max_steps_cycle = self.max_steps_cycle
         if max_steps_cycle is None:
-            max_steps_cycle = max_iterations + 1  # Make sure that we don't run in the end of CG
+            max_steps_cycle = max_iterations + 1  # Make sure that we don't run it in the end of CG
 
         preconditioner = self.preconditioner
 
