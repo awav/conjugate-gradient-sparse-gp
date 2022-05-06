@@ -58,17 +58,10 @@ if __name__ == "__main__":
 
     xt, _ = data
 
-    # opt_result = train_using_lbfgs_and_update(
-    #     data,
-    #     experimental_model,
-    #     clustering_fn,
-    #     num_iterations,
-    #     use_jit=False,
-    # )
-
-    num_iterations = 1000
+    num_iterations = 100
     batch_size = 25
     learning_rate = 0.01
+    use_jit = True
     opt_result = train_using_adam_and_update(
         data,
         experimental_model,
@@ -76,7 +69,7 @@ if __name__ == "__main__":
         num_iterations,
         batch_size,
         learning_rate,
-        use_jit=False,
+        use_jit=use_jit,
     )
 
     print("Optimization results: ")
@@ -119,8 +112,8 @@ if __name__ == "__main__":
     x_test_flat = x_test.reshape(-1)
 
     mu_test, var_test = experimental_model.predict_y(x_test)
-    gpr_mu_test, gpr_var_test = gpr_model.predict_y(x_test)
-    cluster_mu_test, cluster_var_test = cluster_model.predict_y(x_test)
+    # gpr_mu_test, gpr_var_test = gpr_model.predict_y(x_test)
+    # cluster_mu_test, cluster_var_test = cluster_model.predict_y(x_test)
 
     def gen_mean_up_down(mu, var):
         mu = mu.numpy().reshape(-1)
@@ -129,9 +122,9 @@ if __name__ == "__main__":
         down = mu - std
         return mu, up, down
 
-    gpr_mu, gpr_up, gpr_down = gen_mean_up_down(gpr_mu_test, gpr_var_test)
     cg_mu, cg_up, cg_down = gen_mean_up_down(mu_test, var_test)
-    cluster_mu, cluster_up, cluster_down = gen_mean_up_down(cluster_mu_test, cluster_var_test)
+    # gpr_mu, gpr_up, gpr_down = gen_mean_up_down(gpr_mu_test, gpr_var_test)
+    # cluster_mu, cluster_up, cluster_down = gen_mean_up_down(cluster_mu_test, cluster_var_test)
 
     blue = "tab:blue"
     gray = "tab:gray"
@@ -165,19 +158,19 @@ if __name__ == "__main__":
 
     # Plot #3
 
-    ax3.plot(x_test, gpr_mu_test, color=blue, label="GPR")
-    ax3.fill_between(x_test_flat, gpr_up, gpr_down, color=blue, alpha=0.2)
+    # ax3.plot(x_test, gpr_mu_test, color=blue, label="GPR")
+    # ax3.fill_between(x_test_flat, gpr_up, gpr_down, color=blue, alpha=0.2)
 
     ax3.plot(x_test, mu_test, color=gray, label="GP clustering (with CG)")
     ax3.fill_between(x_test_flat, cg_up, cg_down, color=gray, alpha=0.2)
 
-    ax3.plot(x_test, cluster_mu_test, color=orange, label="GP clustering")
-    ax3.fill_between(x_test_flat, cluster_up, cluster_down, color=orange, alpha=0.2)
+    # ax3.plot(x_test, cluster_mu_test, color=orange, label="GP clustering")
+    # ax3.fill_between(x_test_flat, cluster_up, cluster_down, color=orange, alpha=0.2)
 
     ax3.scatter(x, y, color=gray, alpha=0.5, s=8)
     ax3.legend()
 
     plt.tight_layout()
-    plt.savefig("liksvgp.pdf")
+    plt.savefig("cggp.pdf")
     plt.show()
     print("end")

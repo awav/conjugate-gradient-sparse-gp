@@ -3,6 +3,7 @@ import tensorflow as tf
 import gpflow
 from kmeans import kmeans_indices_and_distances
 from models import ClusterGP
+from utils import jit
 
 
 def update_inducing_parameters(
@@ -138,7 +139,7 @@ def train_using_adam_and_update(
 
     dtype = variables[0].dtype
     learning_rate = tf.convert_to_tensor(learning_rate, dtype=dtype)
-    opt = tf.keras.optimizers.Adam(learning_rate)
+    opt = tf.optimizers.Adam(learning_rate)
 
     def update_variational_parameters(*args, **kwargs):
         update_inducing_parameters(model, data, distance_fn, clustering_fn)
@@ -147,6 +148,7 @@ def train_using_adam_and_update(
 
     variables = model.trainable_variables
 
+    @jit(use_jit)
     def optimize_step():
         opt.minimize(loss_fn, variables)
 
@@ -156,5 +158,3 @@ def train_using_adam_and_update(
     for iteration in range(iterations):
         optimize_step()
         update_variational_parameters()
-
-    return None
