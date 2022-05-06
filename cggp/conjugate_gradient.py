@@ -49,7 +49,8 @@ def conjugate_gradient(
         rz: Tensor
 
     def stopping_condition(state):
-        return (tf.reduce_any(0.5 * state.rz > error_threshold)) and (state.i < max_iterations)
+        larger_threshold = tf.reduce_any(0.5 * state.rz > error_threshold)
+        return tf.logical_and(larger_threshold, (state.i < max_iterations))
 
     def cg_step(state):
         pA = state.p @ A

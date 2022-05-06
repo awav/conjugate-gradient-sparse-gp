@@ -136,6 +136,8 @@ def train_using_adam_and_update(
     loss_fn = model.training_loss_closure(data_iter, compile=False)
     variables = model.trainable_variables
 
+    dtype = variables[0].dtype
+    learning_rate = tf.convert_to_tensor(learning_rate, dtype=dtype)
     opt = tf.keras.optimizers.Adam(learning_rate)
 
     def update_variational_parameters(*args, **kwargs):
