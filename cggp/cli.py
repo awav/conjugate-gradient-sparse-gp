@@ -56,8 +56,6 @@ class DatasetType(click.ParamType):
             self.fail(f"{value} dataset is not supported", param, ctx)
         try:
             dataname = value
-            if value != "snelson1d":
-                dataname = f"Wilson_{value}"
             data = load_data(dataname)
             return data
         except Exception as ex:
@@ -201,15 +199,15 @@ def train_cggp_adam(
 
 if __name__ == "__main__":
     # Switch between testing and real CLI script mode
+    testing = False
     # testing = True
-    testing = True
 
     if not testing:
         main()
     else:
         from click.testing import CliRunner
 
-        runner = CliRunner()
+        runner = CliRunner(echo_stdin=True, mix_stderr=True)
         args = [
             "--dataset",
             "elevators",

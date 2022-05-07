@@ -15,5 +15,30 @@
                 "CUDA_VISIBLE_DEVICES": "3"
             },
         },
+        {
+            "name": "Test CLI",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/cggp/cli.py",
+            "console": "integratedTerminal",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}:${workspaceFolder}/cggp/:${env:PYTHONPATH}",
+                "CUDA_DEVICE_ORDER": "PCI_BUS_ID",
+                "CUDA_VISIBLE_DEVICES": "3",
+            },
+            "justMyCode": false,
+            "args": [
+                "--dataset",
+                "elevators",
+                "--jit",
+                "train-cggp-adam",
+                "--num-iterations",
+                "100",
+                "--num-inducing-points",
+                "1000",
+                "--batch-size",
+                "1000",
+            ],
+        },
     ]
 }
