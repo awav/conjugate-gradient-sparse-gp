@@ -184,7 +184,8 @@ def train_cggp_adam(
 
 if __name__ == "__main__":
     # Switch between testing and real CLI script mode
-    testing = True
+    # testing = True
+    testing = False
 
     if not testing:
         main()
