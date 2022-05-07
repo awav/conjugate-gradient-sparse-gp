@@ -1,4 +1,5 @@
 import ast
+import json
 from functools import partial
 from dataclasses import dataclass
 from pathlib import Path
@@ -141,7 +142,7 @@ def main(
 @click.option("-m", "--num-inducing-points", type=int, required=True)
 @click.option("-b", "--batch-size", type=int, required=True)
 @click.option("-l", "--learning-rate", type=float, default=0.01)
-@click.option("-e", "--error-threshold", type=float, default=1e-3)
+@click.option("-e", "--error-threshold", type=float, default=1e-5)
 @click.pass_context
 def train_cggp_adam(
     ctx: click.Context,
@@ -155,12 +156,28 @@ def train_cggp_adam(
     This command `train-cggp-adam' run Adam training on CGGP model.
     """
 
+
     obj: EntryContext = ctx.obj
     dataset = obj.dataset
     jit = obj.jit
     kernel_fn = obj.kernel_fn
     train_data = dataset.train
     test_data = dataset.test
+
+    info = {
+        "command": "train_cggp_adam",
+        "seed": obj.seed,
+        "dataset_name": dataset.name,
+        "num_inducing_points": num_inducing_points,
+        "num_iterations": num_iterations,
+        "use_jit": jit,
+        "batch_size": batch_size,
+        "train_size": train_data[0].shape[0],
+        "test_size": test_data[0].shape[0],
+    }
+
+    info_str = json.dumps(info, indent=2)
+    click.echo(f"-> {info_str}")
 
     def model_fn(kernel, likelihood, iv) -> CGGP:
         conjugate_gradient = ConjugateGradient(error_threshold)
@@ -185,7 +202,7 @@ def train_cggp_adam(
 if __name__ == "__main__":
     # Switch between testing and real CLI script mode
     # testing = True
-    testing = False
+    testing = True
 
     if not testing:
         main()

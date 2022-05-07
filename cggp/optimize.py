@@ -177,6 +177,9 @@ def make_print_callback():
 
 
 def make_param_callback(model):
+    """
+    Callback for tracking parameters in TensorBoard
+    """
     def _callback(*args, **kwargs):
         ks = {
             f"kernel/{k.strip('.')}": v.numpy() for (k, v) in parameter_dict(model.kernel).items()
@@ -191,6 +194,9 @@ def make_param_callback(model):
 
 
 def make_metrics_callback(model, data, batch_size: int, use_jit: bool = True):
+    """
+    Callback for computing test metrics (RMSE and NLPD)
+    """
     dataset = transform_to_dataset(data, batch_size, repeat=False)
 
     @jit(use_jit)

@@ -11,7 +11,7 @@ import bayesian_benchmarks.data as bbd
 from gpflow.config import default_float
 
 Dataset = Tuple[np.ndarray, np.ndarray]
-DatasetBundle = namedtuple("Dataset", "train, test")
+DatasetBundle = namedtuple("DatasetBundle", "name, train, test")
 
 
 def download_and_upzip_file(outpath, url):
@@ -75,16 +75,17 @@ def load_data(name: str) -> DatasetBundle:
     if name == "snelson1d":
         train, test = snelson1d("~/.dataset/snelson1d/")
     else:
+        uci_name = name
         if not name.startswith("Wilson_"):
-            name = f"Wilson_{name}"
+            uci_name = f"Wilson_{name}"
 
-        dat = getattr(bbd, name)(prop=0.67)
+        dat = getattr(bbd, uci_name)(prop=0.67)
         train, test = (dat.X_train, dat.Y_train), (dat.X_test, dat.Y_test)
 
     (x_train, x_mu, x_std), (y_train, y_mu, y_std) = norm_dataset(train)
     x_test = (test[0] - x_mu) / x_std
     y_test = (test[1] - y_mu) / y_std
-    return DatasetBundle(
+    return DatasetBundle(name,
         (_to_float(x_train), _to_float(y_train)),
         (_to_float(x_test), _to_float(y_test)),
     )
