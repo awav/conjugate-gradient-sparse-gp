@@ -46,7 +46,7 @@ if __name__ == "__main__":
         error_threshold = 1e-3
         conjugate_gradient = ConjugateGradient(error_threshold)
         return CGGP(kernel, likelihood, iv, conjugate_gradient)
-    
+
     data, experimental_model, clustering_fn, distance_fn = create_model(
         (x, y),
         num_inducing_points,
@@ -56,7 +56,7 @@ if __name__ == "__main__":
 
     def update_fn():
         kmeans_update_inducing_parameters(experimental_model, data, distance_fn, clustering_fn)
-    
+
     update_fn()
 
     xt, _ = data
@@ -66,13 +66,22 @@ if __name__ == "__main__":
     learning_rate = 0.01
     use_jit = True
 
-    opt_result = train_using_adam_and_update(
+    # opt_result = train_using_adam_and_update(
+    #     data,
+    #     experimental_model,
+    #     num_iterations,
+    #     batch_size,
+    #     learning_rate,
+    #     update_fn,
+    #     use_jit=use_jit,
+    # )
+
+    opt_result = train_using_lbfgs_and_update(
         data,
         experimental_model,
+        clustering_fn,
         num_iterations,
-        batch_size,
-        learning_rate,
-        update_fn,
+        distance_fn=distance_fn,
         use_jit=use_jit,
     )
 

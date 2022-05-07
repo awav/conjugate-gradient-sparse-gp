@@ -16,8 +16,7 @@ def create_model(
     data,
     num_inducing_points: int,
 ):
-    x, y = data
-
+    x = np.array(data[0])
     n = x.shape[0]
     dim = x.shape[-1]
     default_variance = 0.1

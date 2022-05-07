@@ -56,7 +56,7 @@ class DatasetType(click.ParamType):
             self.fail(f"{value} dataset is not supported", param, ctx)
         try:
             dataname = value
-            data = load_data(dataname)
+            data = load_data(dataname, as_tensor=True)
             return data
         except Exception as ex:
             self.fail(f"{value} dataset is not supported", param, ctx)
@@ -153,7 +153,6 @@ def train_cggp_adam(
     """
     This command `train-cggp-adam' run Adam training on CGGP model.
     """
-
 
     obj: EntryContext = ctx.obj
     dataset = obj.dataset

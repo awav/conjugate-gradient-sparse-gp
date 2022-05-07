@@ -8,6 +8,7 @@ from io import BytesIO
 import urllib.request
 
 import bayesian_benchmarks.data as bbd
+import tensorflow as tf
 from gpflow.config import default_float
 
 Dataset = Tuple[np.ndarray, np.ndarray]
@@ -71,7 +72,7 @@ def norm_dataset(data: Dataset) -> Dataset:
     return norm(data[0]), norm(data[1])
 
 
-def load_data(name: str) -> DatasetBundle:
+def load_data(name: str, as_tensor: bool = False) -> DatasetBundle:
     if name == "snelson1d":
         train, test = snelson1d("~/.dataset/snelson1d/")
     else:
@@ -85,11 +86,17 @@ def load_data(name: str) -> DatasetBundle:
     (x_train, x_mu, x_std), (y_train, y_mu, y_std) = norm_dataset(train)
     x_test = (test[0] - x_mu) / x_std
     y_test = (test[1] - y_mu) / y_std
-    return DatasetBundle(name,
-        (_to_float(x_train), _to_float(y_train)),
-        (_to_float(x_test), _to_float(y_test)),
-    )
+
+    x_train = _to_float(x_train, as_tensor=as_tensor)
+    y_train = _to_float(y_train, as_tensor=as_tensor)
+    x_test = _to_float(x_test, as_tensor=as_tensor)
+    y_test = _to_float(y_test, as_tensor=as_tensor)
+
+    return DatasetBundle(name, (x_train, y_train), (x_test, y_test))
 
 
-def _to_float(arr: np.ndarray):
-    return arr.astype(default_float())
+def _to_float(arr: np.ndarray, as_tensor: bool):
+    dtype = default_float()
+    if as_tensor:
+        return tf.convert_to_tensor(arr, dtype=dtype)
+    return arr.astype(dtype)

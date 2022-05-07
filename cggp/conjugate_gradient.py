@@ -7,14 +7,28 @@ import tensorflow as tf
 Tensor = tf.Tensor
 
 
+class CGState(NamedTuple):
+    """
+    Args:
+        i: Iteration index
+        v: Solution vector(s)
+    """
+
+    i: Tensor
+    v: Tensor
+    r: Tensor
+    p: Tensor
+    rz: Tensor
+
+
 def conjugate_gradient(
     matrix: Tensor,
     rhs: Tensor,
     initial_solution: Tensor,
     error_threshold: float,
+    preconditioner: Optional[Callable] = None,
     max_iterations: Optional[int] = None,
     max_steps_cycle: int = 100,
-    preconditioner: Optional[Callable] = None,
 ):
     """
     Conjugate gradient for solving system of linear equations math:`Av = b`.
@@ -27,27 +41,15 @@ def conjugate_gradient(
         error_threshold:
     """
 
+    if preconditioner is None:
+        preconditioner = EyePreconditioner()
+
     if max_iterations is None:
         max_iterations = tf.shape(matrix)[0]
-
-    preconditioner = EyePreconditioner() if preconditioner is None else preconditioner
 
     A = matrix
     v = initial_solution
     b = rhs
-
-    class CGState(NamedTuple):
-        """
-        Args:
-            i: Iteration index
-            v: Solution vector(s)
-        """
-
-        i: Tensor
-        v: Tensor
-        r: Tensor
-        p: Tensor
-        rz: Tensor
 
     def stopping_condition(state):
         larger_threshold = tf.reduce_any(0.5 * state.rz > error_threshold)
@@ -92,7 +94,7 @@ class CGPreconditioner:
         raise NotImplementedError
 
 
-class EyePreconditioner:
+class EyePreconditioner(CGPreconditioner):
     @abc.abstractmethod
     def __call__(self, vec: Tensor) -> Tuple[Tensor, Tensor]:
         return vec, tf.reduce_sum(tf.square(vec), axis=-1, keepdims=True)
@@ -133,15 +135,16 @@ class ConjugateGradient:
             max_steps_cycle = max_iterations + 1  # Make sure that we don't run it in the end of CG
 
         preconditioner = self.preconditioner
+        error_threshold = self.error_threshold
 
         solution, stats = conjugate_gradient(
             matrix,
             rhs,
             initial_solution,
-            self.error_threshold,
-            max_iterations,
-            max_steps_cycle,
-            preconditioner,
+            error_threshold,
+            preconditioner=preconditioner,
+            max_iterations=max_iterations,
+            max_steps_cycle=max_steps_cycle,
         )
 
         return solution
