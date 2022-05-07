@@ -6,8 +6,8 @@ import gpflow
 import tensorflow as tf
 import numpy as np
 
-from playground_util import (
-    create_model,
+from playground_util import create_model
+from optimize import (
     train_vanilla_using_lbfgs,
     train_using_lbfgs_and_update,
 )

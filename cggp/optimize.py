@@ -1,4 +1,5 @@
 from typing import Callable, Optional
+import numpy as np
 import tensorflow as tf
 import gpflow
 from gpflow.utilities import parameter_dict
@@ -8,7 +9,7 @@ from utils import jit
 from monitor import Monitor
 
 
-def update_inducing_parameters(
+def kmeans_update_inducing_parameters(
     model, data, distance_fn: Optional[Callable], clustering_fn: Callable
 ) -> None:
     x, y = data
@@ -98,7 +99,7 @@ def train_using_lbfgs_and_update(
     variables = model.trainable_variables
 
     def update_variational_parameters(*args, **kwargs):
-        update_inducing_parameters(model, data, distance_fn, clustering_fn)
+        kmeans_update_inducing_parameters(model, data, distance_fn, clustering_fn)
 
     gpflow.utilities.set_trainable(model.inducing_variable, False)
 
@@ -116,7 +117,56 @@ def train_using_lbfgs_and_update(
     return None
 
 
-def make_model_snapshot_callback(model):
+def train_using_adam_and_update(
+    data,
+    model: ClusterGP,
+    iterations: int,
+    batch_size: int,
+    learning_rate: float,
+    update_fn: Callable,
+    monitor: Optional[Monitor] = None,
+    use_jit: bool = True,
+):
+    n = data[0].shape[0]
+    dataset = transform_to_dataset(data, batch_size, shuffle=n)
+    data_iter = iter(dataset)
+
+    loss_fn = model.training_loss_closure(data_iter, compile=False)
+    variables = model.trainable_variables
+
+    dtype = variables[0].dtype
+    learning_rate = tf.convert_to_tensor(learning_rate, dtype=dtype)
+    opt = tf.optimizers.Adam(learning_rate)
+
+    variables = model.trainable_variables
+
+    @jit(use_jit)
+    def optimize_step():
+        opt.minimize(loss_fn, variables)
+
+    def monitor_wrapper(step):
+        if monitor is None:
+            return
+        return monitor(step)
+
+    iteration = 0
+    update_fn()
+
+    print("Run monitor")
+    monitor_wrapper(iteration)
+
+    for iteration in range(iterations):
+        # optimize_step()
+        update_fn()
+        monitor_wrapper(iteration)
+
+    if monitor is not None:
+        monitor.flush()
+
+    return
+
+
+def make_param_callback(model):
     def _callback(*args, **kwargs):
         ks = {
             f"kernel/{k.strip('.')}": v.numpy() for (k, v) in parameter_dict(model.kernel).items()
@@ -130,70 +180,53 @@ def make_model_snapshot_callback(model):
     return _callback
 
 
-# def make_step_callback(model, data):
-#     loss_fn = model.training_loss_closure(data_iter, compile=False)
-
-#     def metrics_fn():
-#         yhat, _ = model.predict_y(batch)
-#         return tf.sqrt(tf.reduce_mean(tf.square(y - yhat)))
-
-#     def step_callback(step, *args):
-#         print(f"Step #{step}, lower={lower}, M={m}")
-#         return {}
-
-#     return step_callback
-
-
-def train_using_adam_and_update(
-    data,
-    model: ClusterGP,
-    clustering_fn: Callable,
-    iterations: int,
-    batch_size: int,
-    learning_rate: float,
-    distance_fn: Optional[Callable] = None,
-    use_jit: bool = True,
-):
-    n = data[0].shape[0]
-    data_iter = iter(
-        tf.data.Dataset.from_tensor_slices(data)
-        .shuffle(n)
-        .batch(batch_size)
-        .prefetch(tf.data.experimental.AUTOTUNE)
-        .repeat()
-    )
-
-    loss_fn = model.training_loss_closure(data_iter, compile=False)
-    variables = model.trainable_variables
-
-    dtype = variables[0].dtype
-    learning_rate = tf.convert_to_tensor(learning_rate, dtype=dtype)
-    opt = tf.optimizers.Adam(learning_rate)
-
-    def update_variational_parameters(*args, **kwargs):
-        update_inducing_parameters(model, data, distance_fn, clustering_fn)
-
-    gpflow.utilities.set_trainable(model.inducing_variable, False)
-    variables = model.trainable_variables
+def make_metrics_callback(model, data, batch_size: int, use_jit: bool = True):
+    dataset = transform_to_dataset(data, batch_size, repeat=False)
 
     @jit(use_jit)
-    def optimize_step():
-        opt.minimize(loss_fn, variables)
+    def metrics_fn(batch):
+        x, y = batch
+        elbo = model.elbo(batch)
+        mu, var = model.predict_f(x)
+        lpd = model.likelihood.predict_log_density(mu, var, y)
+        lpd = tf.reduce_sum(lpd)
+        error = y - mu
+        return elbo, error, lpd
 
-    update_variational_parameters()
+    def step_callback(step, *args):
+        error = np.array([]).reshape(-1, 1)
+        lpd = 0.0
+        elbo = 0.0
+        for batch in dataset:
+            batch_elbo, batch_error, batch_log_density = metrics_fn(batch)
+            elbo += batch_elbo.numpy()
+            lpd += batch_log_density.numpy()
+            error = np.concatenate([error, batch_error.numpy()], axis=0)
 
-    monitor = create_monitor(model)
-    iteration = 0
-    monitor(iteration)
+        rmse = np.sqrt(np.mean(error**2))
+        nlpd = -lpd
+        return {"test/rmse": rmse, "test/nlpd": nlpd}
 
-    for iteration in range(iterations):
-        optimize_step()
-        update_variational_parameters()
-        monitor(iteration)
+    return step_callback
 
 
-def create_monitor(model) -> Monitor:
+def transform_to_dataset(
+    data, batch_size, repeat: bool = True, shuffle: Optional[int] = None
+) -> tf.data.Dataset:
+    data = tf.data.Dataset.from_tensor_slices(data)
+    if shuffle is not None:
+        data = data.shuffle(shuffle)
+
+    data = data.batch(batch_size).prefetch(tf.data.experimental.AUTOTUNE)
+    if repeat:
+        data = data.repeat()
+    return data
+
+
+def create_monitor(model, data, batch_size, use_jit: bool = True) -> Monitor:
     monitor = Monitor("./default_logdir")
-    param_callback = make_model_snapshot_callback(model)
+    param_callback = make_param_callback(model)
+    metric_callback = make_metrics_callback(model, data, batch_size, use_jit=use_jit)
     monitor.add_callback("params", param_callback)
+    monitor.add_callback("metrics", metric_callback, record_step=5)
     return monitor

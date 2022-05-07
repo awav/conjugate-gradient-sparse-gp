@@ -1,4 +1,5 @@
 import abc
+from typing import Union
 from distutils.log import error
 from typing import Callable, NamedTuple, Optional, Tuple
 import tensorflow as tf
@@ -75,7 +76,7 @@ def conjugate_gradient(
     r = b - vA
     z, rz = preconditioner(r)
     p = z
-    i = tf.constant(0, dtype=tf.int32)
+    i = tf.convert_to_tensor(0, dtype=tf.int32)
     initial_state = CGState(i, v, r, p, rz)
     final_state = tf.while_loop(stopping_condition, cg_step, [initial_state])
     final_state = tf.nest.map_structure(tf.stop_gradient, final_state)[0]
@@ -99,13 +100,13 @@ class EyePreconditioner:
 
 class ConjugateGradient:
     preconditioner: CGPreconditioner
-    error_threshold: Tensor
+    error_threshold: Union[Tensor, float]
     max_iterations: Optional[int]
     max_steps_cycle: Optional[int]
 
     def __init__(
         self,
-        error_threshold: Tensor,
+        error_threshold: Union[Tensor, float],
         preconditioner: Optional[CGPreconditioner] = None,
         max_iterations: Optional[int] = None,
         max_steps_cycle: Optional[int] = None,

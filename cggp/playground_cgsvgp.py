@@ -1,7 +1,7 @@
 from kmeans import kmeans_indices_and_distances
 from models import ClusterGP, CGGP
 from conjugate_gradient import ConjugateGradient
-from data import snelson1d
+from data import snelson1d, load_data
 import matplotlib.pyplot as plt
 import gpflow
 import tensorflow as tf
@@ -10,7 +10,7 @@ import numpy as np
 from playground_util import create_model
 
 from optimize import (
-    update_inducing_parameters,
+    kmeans_update_inducing_parameters,
     train_using_lbfgs_and_update,
     train_using_adam_and_update,
 )
@@ -46,7 +46,7 @@ if __name__ == "__main__":
         error_threshold = 1e-3
         conjugate_gradient = ConjugateGradient(error_threshold)
         return CGGP(kernel, likelihood, iv, conjugate_gradient)
-
+    
     data, experimental_model, clustering_fn, distance_fn = create_model(
         (x, y),
         num_inducing_points,
@@ -54,7 +54,10 @@ if __name__ == "__main__":
         model_class,
     )
 
-    update_inducing_parameters(experimental_model, data, distance_fn, clustering_fn)
+    def update_fn():
+        kmeans_update_inducing_parameters(experimental_model, data, distance_fn, clustering_fn)
+    
+    update_fn()
 
     xt, _ = data
 
@@ -62,13 +65,14 @@ if __name__ == "__main__":
     batch_size = 25
     learning_rate = 0.01
     use_jit = True
+
     opt_result = train_using_adam_and_update(
         data,
         experimental_model,
-        clustering_fn,
         num_iterations,
         batch_size,
         learning_rate,
+        update_fn,
         use_jit=use_jit,
     )
 

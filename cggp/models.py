@@ -156,6 +156,7 @@ class ClusterGP(LpSVGP):
         if pseudo_u is not None:
             self.pseudo_u.assign(pseudo_u)
 
+        gpflow.utilities.set_trainable(self.inducing_variable, False)
         gpflow.utilities.set_trainable(self.pseudo_u, False)
         gpflow.utilities.set_trainable(self.diag_variance, False)
 

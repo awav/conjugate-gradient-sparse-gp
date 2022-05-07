@@ -5,7 +5,7 @@ import numpy as np
 
 
 class Monitor:
-    __initial_iteration: int = 1
+    __initial_iteration: int = 0
 
     def __init__(self, logdir: Union[Path, str]):
         max_queue = 5
