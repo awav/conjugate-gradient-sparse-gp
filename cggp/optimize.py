@@ -156,7 +156,7 @@ def train_using_adam_and_update(
     monitor_wrapper(iteration)
 
     for iteration in range(iterations):
-        # optimize_step()
+        optimize_step()
         update_fn()
         monitor_wrapper(iteration)
 
@@ -164,6 +164,16 @@ def train_using_adam_and_update(
         monitor.flush()
 
     return
+
+
+def make_print_callback():
+    import click
+
+    def print_callback(step: int, *args, **kwargs):
+        click.echo(f"Step: {step}")
+        return {}
+    
+    return print_callback
 
 
 def make_param_callback(model):
@@ -193,7 +203,7 @@ def make_metrics_callback(model, data, batch_size: int, use_jit: bool = True):
         error = y - mu
         return elbo, error, lpd
 
-    def step_callback(step, *args):
+    def step_callback(step, *args, **kwargs):
         error = np.array([]).reshape(-1, 1)
         lpd = 0.0
         elbo = 0.0
@@ -225,8 +235,10 @@ def transform_to_dataset(
 
 def create_monitor(model, data, batch_size, use_jit: bool = True) -> Monitor:
     monitor = Monitor("./default_logdir")
+    print_callback = make_print_callback()
     param_callback = make_param_callback(model)
     metric_callback = make_metrics_callback(model, data, batch_size, use_jit=use_jit)
+    monitor.add_callback("print", print_callback)
     monitor.add_callback("params", param_callback)
     monitor.add_callback("metrics", metric_callback, record_step=5)
     return monitor
