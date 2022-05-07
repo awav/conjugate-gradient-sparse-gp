@@ -237,8 +237,8 @@ class PathwiseClusterSVGP(ClusterSVGP):
 
         error_squared = tf.square(y[newaxis, ...] - samples)
         likelihood = noise_inv * tf.reduce_sum(error_squared) / num_samples
-        constant_term = num_data * tf.math.log(noise)
-        return 0.5 * (likelihood + constant_term)
+        constant_term = num_data * tf.math.log(2.0 * np.pi * noise)
+        return -0.5 * (likelihood + constant_term)
 
 
     def pathwise_samples(self, sample_at: Tensor, num_bases: int, num_samples: int) -> Tensor:

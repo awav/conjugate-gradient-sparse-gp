@@ -85,9 +85,12 @@ class ModifiedCoverTree:
                 while len(active_data) > 0:
                     point = (0.75 * active_data[0]) + (0.25 * node.point)
                     point_distances = self.distance((point, active_data))
-                    point_idxs = point_distances <= radius
-                    point_neighborhood = active_data[point_idxs, :]
-                    child = CoverTreeNode(point, radius, node, point_neighborhood)
+                    point_neighborhood = active_data[point_distances <= radius, :]
+                    mean = (0.75 * point_neighborhood.mean(axis = -2)) + (0.25 * node.point)
+                    mean_distances = self.distance((mean, active_data))
+                    mean_idxs = mean_distances <= radius
+                    mean_neighborhood = active_data[mean_idxs, :]
+                    child = CoverTreeNode(mean, radius, node, mean_neighborhood)
                     self.levels[level].append(child)
                     node.children.append(child)
                     active_data = active_data[~point_idxs, :]
