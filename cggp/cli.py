@@ -105,7 +105,7 @@ class EntryContext:
 
 
 @click.group()
-@click.option("-d", "--dataset", type=DatasetType())
+@click.option("-d", "--dataset", type=DatasetType(), required=True)
 @click.option("-k", "--kernel", type=KernelType(), default="se")
 @click.option("-l", "--logdir", type=LogdirPath(), default=__default_logdir)
 @click.option("-s", "--seed", type=int, default=0)
@@ -137,9 +137,9 @@ def main(
 
 
 @main.command()
-@click.option("-n", "--num-iterations", type=int)
-@click.option("-m", "--num-inducing-points", type=int)
-@click.option("-b", "--batch-size", type=int)
+@click.option("-n", "--num-iterations", type=int, required=True)
+@click.option("-m", "--num-inducing-points", type=int, required=True)
+@click.option("-b", "--batch-size", type=int, required=True)
 @click.option("-l", "--learning-rate", type=float, default=0.01)
 @click.option("-e", "--error-threshold", type=float, default=1e-3)
 @click.pass_context
