@@ -155,6 +155,7 @@ def plotting_samples():
     ax.scatter(x, y, color=gray, alpha=0.5, s=8)
 
     plt.tight_layout()
+    plt.savefig("pathwise.pdf")
     plt.show()
     pass
 
