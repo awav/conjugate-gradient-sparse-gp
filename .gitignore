@@ -1,4 +1,7 @@
 # Additional files and directories
+logs
+default_logdir
+logs-default
 .datasets
 *.pdf
 

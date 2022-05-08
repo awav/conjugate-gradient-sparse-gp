@@ -1,17 +1,15 @@
-from kmeans import (
-    kmeans_indices_and_distances,
-)
-from models import LpSVGP, ClusterSVGP
+from kmeans import kmeans_indices_and_distances
+from models import LpSVGP, ClusterGP
 from data import snelson1d
 import matplotlib.pyplot as plt
 import gpflow
 import tensorflow as tf
 import numpy as np
 
-from playground_util import (
-    create_model,
+from playground_util import create_model
+from optimize import (
     train_vanilla_using_lbfgs,
-    train_using_lbfgs_and_varpar_update,
+    train_using_lbfgs_and_update,
 )
 
 
@@ -36,10 +34,10 @@ if __name__ == "__main__":
     # Model setup
     #   `model_class` switches between different models
     #   as well as training procedures.
-    #   Available options are LpSVGP and ClusterSVGP.
+    #   Available options are LpSVGP and ClusterGP.
 
     # model_class = LpSVGP
-    model_class = ClusterSVGP
+    model_class = ClusterGP
     data, experimental_model, clustering_fn, distance_fn = create_model(
         (x, y),
         num_inducing_points,
@@ -52,9 +50,9 @@ if __name__ == "__main__":
         opt_result = train_vanilla_using_lbfgs(
             data, experimental_model, clustering_fn, num_iterations
         )
-    elif model_class == ClusterSVGP:
+    elif model_class == ClusterGP:
         outer_num_iters = 100
-        opt_result = train_using_lbfgs_and_varpar_update(
+        opt_result = train_using_lbfgs_and_update(
             data, experimental_model, clustering_fn, num_iterations
         )
     else:
