@@ -1,12 +1,11 @@
 import numpy as np
-from covertree import OriginalCoverTree, ModifiedCoverTree, euclid_distance
+from covertree import ModifiedCoverTree, euclid_distance
 import matplotlib.pyplot as plt
 
 if __name__ == "__main__":
     data = np.random.rand(200, 2)
     minimum_radius = 0.1
-    num_levels = 4
-    # tree = OriginalCoverTree(euclid_distance, data, minimum_radius)
+    num_levels = 5
     tree = ModifiedCoverTree(euclid_distance, data, num_levels)
     fig, axes = plt.subplots(1, num_levels, figsize=((6 * num_levels, 6)))
     for level in range(len(tree.levels)):
