@@ -30,7 +30,7 @@
             "args": [
                 "--dataset",
                 "elevators",
-                "--jit",
+                "--no-jit",
                 "train-cggp-adam",
                 "--num-iterations",
                 "100",

@@ -200,9 +200,9 @@ def make_metrics_callback(model, data, batch_size: int, use_jit: bool = True):
     dataset = transform_to_dataset(data, batch_size, repeat=False)
 
     @jit(use_jit)
-    def metrics_fn(batch):
-        x, y = batch
-        elbo = model.elbo(batch)
+    def metrics_fn(data):
+        x, y = data
+        elbo = model.elbo(data)
         mu, var = model.predict_f(x)
         lpd = model.likelihood.predict_log_density(mu, var, y)
         lpd = tf.reduce_sum(lpd)
