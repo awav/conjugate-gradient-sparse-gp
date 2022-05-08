@@ -50,6 +50,7 @@ def conjugate_gradient(
     A = matrix
     v = initial_solution
     b = rhs
+    min_float = tf.convert_to_tensor(1e-10, dtype=v.dtype)
 
     def stopping_condition(state):
         over_threshold = tf.reduce_any(0.5 * state.rz > error_threshold)
@@ -57,7 +58,6 @@ def conjugate_gradient(
 
     def cg_step(state):
         pA = state.p @ A
-        min_float = 1e-10
         denom = tf.reduce_sum(state.p * pA, axis=-1, keepdims=True)
         gamma = state.rz / denom
         gamma = tf.where(denom <= min_float, 0.0, gamma)
