@@ -52,26 +52,30 @@ def conjugate_gradient(
     b = rhs
 
     def stopping_condition(state):
-        larger_threshold = tf.reduce_any(0.5 * state.rz > error_threshold)
-        return tf.logical_and(larger_threshold, (state.i < max_iterations))
+        over_threshold = tf.reduce_any(0.5 * state.rz > error_threshold)
+        return tf.logical_and(over_threshold, (state.i < max_iterations))
 
     def cg_step(state):
         pA = state.p @ A
+        min_float = 1e-10
         denom = tf.reduce_sum(state.p * pA, axis=-1, keepdims=True)
         gamma = state.rz / denom
+        gamma = tf.where(denom <= min_float, 0.0, gamma)
         v = state.v + gamma * state.p
         i = state.i + 1
+        reset = state.i % max_steps_cycle == max_steps_cycle - 1
         r = tf.cond(
-            state.i % max_steps_cycle == max_steps_cycle - 1,
+            reset,
             lambda: b - v @ A,
             lambda: state.r - gamma * pA,
         )
         z, new_rz = preconditioner(r)
         p = tf.cond(
-            state.i % max_steps_cycle == max_steps_cycle - 1,
+            reset,
             lambda: z,
             lambda: z + state.p * new_rz / state.rz,
         )
+        p = tf.where(state.rz <= min_float, 0.0, p)
         return [CGState(i, v, r, p, new_rz)]
 
     vA = v @ A

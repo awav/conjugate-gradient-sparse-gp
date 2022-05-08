@@ -26,7 +26,7 @@ def create_model(
 
     likelihood = gpflow.likelihoods.Gaussian(variance=default_variance)
     kernel = kernel_fn(dim)
-    model = model_fn(kernel, likelihood, iv)
+    model = model_fn(kernel, likelihood, iv, num_data=n)
 
     return model
 

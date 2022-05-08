@@ -177,13 +177,14 @@ def train_cggp_adam(
     info_str = json.dumps(info, indent=2)
     click.echo(f"-> {info_str}")
 
-    def model_fn(kernel, likelihood, iv) -> CGGP:
+    def model_fn(kernel, likelihood, iv, **kwargs) -> CGGP:
         conjugate_gradient = ConjugateGradient(error_threshold)
-        return CGGP(kernel, likelihood, iv, conjugate_gradient)
+        return CGGP(kernel, likelihood, iv, conjugate_gradient, **kwargs)
 
     model = create_model(model_fn, kernel_fn, train_data, num_inducing_points)
     update_fn = create_update_fn(model, train_data, num_inducing_points, use_jit=jit)
-    monitor = create_monitor(model, test_data, batch_size, use_jit=jit)
+    monitor_batch_size = batch_size * 5
+    monitor = create_monitor(model, test_data, monitor_batch_size, use_jit=jit)
 
     train_using_adam_and_update(
         train_data,
