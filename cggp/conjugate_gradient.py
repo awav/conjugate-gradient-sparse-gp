@@ -1,8 +1,24 @@
 import abc
+from typing import Union
+from distutils.log import error
 from typing import Callable, NamedTuple, Optional, Tuple
 import tensorflow as tf
 
 Tensor = tf.Tensor
+
+
+class CGState(NamedTuple):
+    """
+    Args:
+        i: Iteration index
+        v: Solution vector(s)
+    """
+
+    i: Tensor
+    v: Tensor
+    r: Tensor
+    p: Tensor
+    rz: Tensor
 
 
 def conjugate_gradient(
@@ -10,9 +26,9 @@ def conjugate_gradient(
     rhs: Tensor,
     initial_solution: Tensor,
     error_threshold: float,
+    preconditioner: Optional[Callable] = None,
     max_iterations: Optional[int] = None,
     max_steps_cycle: int = 100,
-    preconditioner: Optional[Callable] = None,
 ):
     """
     Conjugate gradient for solving system of linear equations math:`Av = b`.
@@ -25,31 +41,19 @@ def conjugate_gradient(
         error_threshold:
     """
 
+    if preconditioner is None:
+        preconditioner = EyePreconditioner()
+
     if max_iterations is None:
         max_iterations = tf.shape(matrix)[0]
-
-    preconditioner = EyePreconditioner() if preconditioner is None else preconditioner
-
 
     A = matrix
     v = initial_solution
     b = rhs
 
-    class CGState(NamedTuple):
-        """
-        Args:
-            i: Iteration index
-            v: Solution vector(s)
-        """
-
-        i: Tensor
-        v: Tensor
-        r: Tensor
-        p: Tensor
-        rz: Tensor
-
     def stopping_condition(state):
-        return (tf.reduce_any(0.5 * state.rz > error_threshold)) and (state.i < max_iterations)
+        larger_threshold = tf.reduce_any(0.5 * state.rz > error_threshold)
+        return tf.logical_and(larger_threshold, (state.i < max_iterations))
 
     def cg_step(state):
         pA = state.p @ A
@@ -74,7 +78,7 @@ def conjugate_gradient(
     r = b - vA
     z, rz = preconditioner(r)
     p = z
-    i = tf.constant(0, dtype=tf.int32)
+    i = tf.convert_to_tensor(0, dtype=tf.int32)
     initial_state = CGState(i, v, r, p, rz)
     final_state = tf.while_loop(stopping_condition, cg_step, [initial_state])
     final_state = tf.nest.map_structure(tf.stop_gradient, final_state)[0]
@@ -90,7 +94,57 @@ class CGPreconditioner:
         raise NotImplementedError
 
 
-class EyePreconditioner:
+class EyePreconditioner(CGPreconditioner):
     @abc.abstractmethod
     def __call__(self, vec: Tensor) -> Tuple[Tensor, Tensor]:
         return vec, tf.reduce_sum(tf.square(vec), axis=-1, keepdims=True)
+
+
+class ConjugateGradient:
+    preconditioner: CGPreconditioner
+    error_threshold: Union[Tensor, float]
+    max_iterations: Optional[int]
+    max_steps_cycle: Optional[int]
+
+    def __init__(
+        self,
+        error_threshold: Union[Tensor, float],
+        preconditioner: Optional[CGPreconditioner] = None,
+        max_iterations: Optional[int] = None,
+        max_steps_cycle: Optional[int] = None,
+    ):
+        self.error_threshold = error_threshold
+        if preconditioner is None:
+            preconditioner = EyePreconditioner()
+        self.preconditioner = preconditioner
+        self.max_iterations = max_iterations
+        self.max_steps_cycle = max_steps_cycle
+
+    def __call__(
+        self, matrix: Tensor, rhs: Tensor, initial_solution: Optional[Tensor] = None
+    ) -> Tensor:
+        if initial_solution is None:
+            initial_solution = tf.zeros_like(rhs)
+
+        max_iterations = self.max_iterations
+        if max_iterations is None:
+            max_iterations = tf.shape(matrix)[-1]
+
+        max_steps_cycle = self.max_steps_cycle
+        if max_steps_cycle is None:
+            max_steps_cycle = max_iterations + 1  # Make sure that we don't run it in the end of CG
+
+        preconditioner = self.preconditioner
+        error_threshold = self.error_threshold
+
+        solution, stats = conjugate_gradient(
+            matrix,
+            rhs,
+            initial_solution,
+            error_threshold,
+            preconditioner=preconditioner,
+            max_iterations=max_iterations,
+            max_steps_cycle=max_steps_cycle,
+        )
+
+        return solution
