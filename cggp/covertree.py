@@ -1,8 +1,8 @@
 import gpflow
-from typing import Callable, Literal, Optional, Tuple
-import numpy as np
+from typing import Callable, Literal, Optional
 import tensorflow as tf
 import matplotlib.pyplot as plt
+import math
 
 Tensor = tf.Tensor
 DistanceType = Literal["Euclidean", "covariance", "correlation"]
@@ -50,7 +50,7 @@ class CoverTreeNode:
         self.radius = radius
         self.parent = parent
         self.data = data
-        self.original_data = data.copy()
+        self.original_data = data.numpy()
         self.children = []
 
     def print(self, original_data):
@@ -64,22 +64,35 @@ class CoverTreeNode:
         ax.add_patch(circle)
         plt.show()
 
-
 class ModifiedCoverTree:
     def __init__(
         self,
         distance: Callable,
         data,
-        num_levels: int,
+        min_radius: Optional[float] = None,
+        num_levels: Optional[int] = 1,
     ):
         self.distance = distance
-        self.levels = [[] for _ in range(num_levels)]
 
-        root_mean = data.mean(axis=-2)
+        data = tf.convert_to_tensor(data)
+
+        root_mean = tf.math.reduce_mean(data, axis=-2)
         root_distances = self.distance((root_mean, data))
-        max_radius = np.max(root_distances)
+        max_radius = tf.math.reduce_mean(root_distances)
+
+        print(max_radius)
+        print(max_radius / min_radius)
+        print(tf.math.log(max_radius / min_radius) / math.log(2))
+
+        if min_radius is not None:
+            num_levels = math.ceil(math.log2(max_radius / min_radius)) + 2
+            max_radius = min_radius * (2**(num_levels-1))
+
+        print(num_levels)
+        print(max_radius)
 
         node = CoverTreeNode(root_mean, max_radius, None, data)
+        self.levels = [[] for _ in range(num_levels)]
         self.levels[0].append(node)
 
         for level in range(1, num_levels):
@@ -90,10 +103,11 @@ class ModifiedCoverTree:
                     point = (0.75 * active_data[0]) + (0.25 * node.point)
                     distances = self.distance((point, active_data))
                     indices = distances <= radius
-                    neighborhood = active_data[indices, :]
+                    neighborhood = tf.boolean_mask(active_data, indices)
                     child = CoverTreeNode(point, radius, node, neighborhood)
                     self.levels[level].append(child)
                     node.children.append(child)
-                    active_data = active_data[~indices, :]
-
-        self.nodes = [node for level in self.levels for node in level]
+                    active_data = tf.boolean_mask(active_data, ~indices)
+    
+    def inducing_points(self):
+        return tf.stack([node.point for node in self.levels[-1]])
