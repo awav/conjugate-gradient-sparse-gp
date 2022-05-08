@@ -171,6 +171,7 @@ def train_cggp_adam(
         "batch_size": batch_size,
         "train_size": train_data[0].shape[0],
         "test_size": test_data[0].shape[0],
+        "input_dimension": train_data[0].shape[-1],
     }
 
     info_str = json.dumps(info, indent=2)
