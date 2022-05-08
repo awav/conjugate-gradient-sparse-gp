@@ -213,6 +213,7 @@ def make_metrics_callback(model, data, batch_size: int, use_jit: bool = True):
         error = np.array([]).reshape(-1, 1)
         lpd = 0.0
         elbo = 0.0
+
         for batch in dataset:
             batch_elbo, batch_error, batch_log_density = metrics_fn(batch)
             elbo += batch_elbo.numpy()
