@@ -51,6 +51,7 @@ def conjugate_gradient(
     v = initial_solution
     b = rhs
     min_float = tf.convert_to_tensor(1e-10, dtype=v.dtype)
+    zero = tf.constant(0.0, dtype=v.dtype)
 
     def stopping_condition(state):
         over_threshold = tf.reduce_any(0.5 * state.rz > error_threshold)
@@ -60,7 +61,7 @@ def conjugate_gradient(
         pA = state.p @ A
         denom = tf.reduce_sum(state.p * pA, axis=-1, keepdims=True)
         gamma = state.rz / denom
-        gamma = tf.where(denom <= min_float, 0.0, gamma)
+        gamma = tf.where(denom <= min_float, zero, gamma)
         v = state.v + gamma * state.p
         i = state.i + 1
         reset = state.i % max_steps_cycle == max_steps_cycle - 1
@@ -70,12 +71,13 @@ def conjugate_gradient(
             lambda: state.r - gamma * pA,
         )
         z, new_rz = preconditioner(r)
+        z_update = state.p * new_rz / state.rz
+        z_update = tf.where(state.rz <= min_float, zero, z_update)
         p = tf.cond(
             reset,
             lambda: z,
-            lambda: z + state.p * new_rz / state.rz,
+            lambda: z + z_update,
         )
-        p = tf.where(state.rz <= min_float, 0.0, p)
         return [CGState(i, v, r, p, new_rz)]
 
     vA = v @ A
