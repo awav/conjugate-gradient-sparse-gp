@@ -116,6 +116,8 @@ class ModifiedCoverTree:
     ):
         self.distance = distance
         self.levels = [[] for _ in range(num_levels)]
+
+        data = np.array(data)
         original_data = data.copy()
 
         root_mean = data.mean(axis=-2)
@@ -143,3 +145,8 @@ class ModifiedCoverTree:
                     active_data = active_data[~mean_idxs, :]
 
         self.nodes = [node for level in self.levels for node in level]
+    
+    def compute_cluster_characters(self):
+        for nodes in self.levels[-1]:
+            nodes.
+
