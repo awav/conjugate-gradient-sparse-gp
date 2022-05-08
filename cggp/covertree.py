@@ -1,8 +1,8 @@
 import gpflow
-from typing import Callable, Literal, Optional, Tuple
-import numpy as np
+from typing import Callable, Literal, Optional
 import tensorflow as tf
 import matplotlib.pyplot as plt
+import math
 
 Tensor = tf.Tensor
 DistanceType = Literal["Euclidean", "covariance", "correlation"]
@@ -69,10 +69,10 @@ class ModifiedCoverTree:
         self,
         distance: Callable,
         data,
-        num_levels: int,
+        min_radius: Optional[float] = None,
+        num_levels: Optional[int] = 1,
     ):
         self.distance = distance
-        self.levels = [[] for _ in range(num_levels)]
 
         data = tf.convert_to_tensor(data)
 
@@ -80,7 +80,19 @@ class ModifiedCoverTree:
         root_distances = self.distance((root_mean, data))
         max_radius = tf.math.reduce_mean(root_distances)
 
+        print(max_radius)
+        print(max_radius / min_radius)
+        print(tf.math.log(max_radius / min_radius) / math.log(2))
+
+        if min_radius is not None:
+            num_levels = math.ceil(math.log2(max_radius / min_radius)) + 2
+            max_radius = min_radius * (2**(num_levels-1))
+
+        print(num_levels)
+        print(max_radius)
+
         node = CoverTreeNode(root_mean, max_radius, None, data)
+        self.levels = [[] for _ in range(num_levels)]
         self.levels[0].append(node)
 
         for level in range(1, num_levels):
