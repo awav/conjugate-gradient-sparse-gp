@@ -2,10 +2,10 @@ import numpy as np
 import tensorflow as tf
 import gpflow
 
-from models import ClusterSVGP
+from models import ClusterGP
 from data import snelson1d
 
-from playground_util import create_model, train_using_lbfgs_and_varpar_update
+from playground_util import create_model, train_using_lbfgs_and_update
 from utils import add_diagonal
 from conjugate_gradient import conjugate_gradient
 
@@ -42,7 +42,7 @@ def logdet_gradient_estimation():
     distance_type = "covariance"
     num_inducing_points = 20
 
-    model_class = ClusterSVGP
+    model_class = ClusterGP
     data, model, clustering_fn, distance_fn = create_model(
         train_data,
         num_inducing_points,
@@ -50,7 +50,7 @@ def logdet_gradient_estimation():
         model_class,
     )
 
-    opt_res = train_using_lbfgs_and_varpar_update(data, model, clustering_fn, 0)
+    opt_res = train_using_lbfgs_and_update(data, model, clustering_fn, 0)
 
     iv = model.inducing_variable
     kuu = gpflow.covariances.Kuu(iv, model.kernel)

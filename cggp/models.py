@@ -7,8 +7,10 @@ from numpy import newaxis
 from gpflow import Parameter
 from gpflow.utilities import positive
 from gpflow.config import default_float
+
 from utils import add_diagonal
 from rff import rff_sample
+from conjugate_gradient import ConjugateGradient
 
 
 Tensor = tf.Tensor
@@ -125,7 +127,7 @@ class LpSVGP(gpflow.models.GPModel, gpflow.models.ExternalDataTrainingLossMixin)
         return self.predict_f(ip, full_cov=full_cov)
 
 
-class ClusterSVGP(LpSVGP):
+class ClusterGP(LpSVGP):
     def __init__(
         self,
         kernel,
@@ -154,6 +156,7 @@ class ClusterSVGP(LpSVGP):
         if pseudo_u is not None:
             self.pseudo_u.assign(pseudo_u)
 
+        gpflow.utilities.set_trainable(self.inducing_variable, False)
         gpflow.utilities.set_trainable(self.pseudo_u, False)
         gpflow.utilities.set_trainable(self.diag_variance, False)
 
@@ -165,16 +168,17 @@ class ClusterSVGP(LpSVGP):
 
         Kmm = gpflow.covariances.Kuu(iv, kernel, jitter=0.0)
         K = add_diagonal(Kmm, var[:, 0])
-        L = tf.linalg.cholesky(K)
 
+        L = tf.linalg.cholesky(K)
         KzzLambdaInv_u = tf.linalg.cholesky_solve(L, pseudo_u)
+
         quad = tf.reduce_sum(tf.matmul(Kmm, KzzLambdaInv_u) * KzzLambdaInv_u)
 
         trace = tf.linalg.trace(tf.linalg.cholesky_solve(L, Kmm))
-        logdet = tf.reduce_sum(2.0 * tf.math.log(tf.linalg.diag_part(L))) - tf.reduce_sum(
-            tf.math.log(var)
-        )
-        return 0.5 * (quad - trace + logdet)
+        logdet = tf.reduce_sum(2.0 * tf.math.log(tf.linalg.diag_part(L)))
+        const = tf.reduce_sum(tf.math.log(var))
+
+        return 0.5 * (quad - trace + logdet - const)
 
     def predict_f(self, Xnew, full_cov: bool = False, full_output_cov: bool = False) -> Moments:
         assert not full_output_cov
@@ -188,9 +192,9 @@ class ClusterSVGP(LpSVGP):
         pseudo_u = self.pseudo_u
         var = self.diag_variance
         K = add_diagonal(Kmm, var[:, 0])
+
         L = tf.linalg.cholesky(K)
         KuuInv_u = tf.linalg.cholesky_solve(L, pseudo_u)
-
         A = tf.linalg.triangular_solve(L, Kmn)
 
         if not full_cov:
@@ -200,13 +204,85 @@ class ClusterSVGP(LpSVGP):
             fvar = fvar[None, ...]
 
         fmu = tf.matmul(Kmn, KuuInv_u, transpose_a=True)
-
         predict_mu = fmu + self.mean_function(Xnew)
         predict_var = fvar
         return predict_mu, predict_var
 
 
-class PathwiseClusterSVGP(ClusterSVGP):
+class CGGP(ClusterGP):
+    def __init__(
+        self, kernel, likelihood, inducing_variable, conjugate_gradient: ConjugateGradient, **kwargs
+    ):
+        super().__init__(kernel, likelihood, inducing_variable, **kwargs)
+        self.conjugate_gradient = conjugate_gradient
+    
+    def prior_kl(self) -> Tensor:
+        kernel = self.kernel
+        iv = self.inducing_variable
+        pseudo_u = self.pseudo_u
+        var = self.diag_variance
+
+        Kmm = gpflow.covariances.Kuu(iv, kernel, jitter=0.0)
+        KmmLambda = add_diagonal(Kmm, var[:, 0])
+
+        pseudo_u_t = tf.transpose(pseudo_u)
+        KmmLambdaInv_u = self.conjugate_gradient(KmmLambda, pseudo_u_t)
+        KmmLambdaInv_Kmm = self.conjugate_gradient(KmmLambda, Kmm)
+
+        quad = tf.reduce_sum(tf.matmul(Kmm, KmmLambdaInv_u, transpose_b=True) * KmmLambdaInv_u)
+
+        @tf.custom_gradient
+        def eval_logdet(matrix):
+            dtype = matrix.dtype
+
+            def grad_logdet(df: Tensor) -> Tensor:
+                n = tf.shape(matrix)[-1]
+                eye = tf.linalg.eye(n, dtype=dtype)
+                KmmLambdaInv = self.conjugate_gradient(matrix, eye)
+                KmmLambdaInv = tf.transpose(KmmLambdaInv)
+                return df * KmmLambdaInv
+
+            return tf.constant(0.0, dtype=dtype), grad_logdet
+
+        logdet = eval_logdet(KmmLambda)
+        trace = tf.linalg.trace(KmmLambdaInv_Kmm)
+        const = tf.reduce_sum(tf.math.log(var))
+        return 0.5 * (quad - trace + logdet - const)
+
+    def predict_f(self, Xnew, full_cov: bool = False, full_output_cov: bool = False) -> Moments:
+        assert not full_output_cov
+
+        iv = self.inducing_variable
+        kernel = self.kernel
+        Kmm = gpflow.covariances.Kuu(iv, kernel, jitter=0.0)  # M x M
+        Kmn = gpflow.covariances.Kuf(iv, kernel, Xnew)  # M x N
+        Knn = kernel.K(Xnew) if full_cov else kernel.K_diag(Xnew)
+
+        Knm = tf.transpose(Kmn)
+
+        pseudo_u = self.pseudo_u
+        pseudo_u_t = tf.transpose(pseudo_u)
+        var = self.diag_variance
+        KmmLambda = add_diagonal(Kmm, var[:, 0])
+
+        KmmLambdaInv_u = self.conjugate_gradient(KmmLambda, pseudo_u_t)
+        KmmLambdaInv_Kmn = self.conjugate_gradient(KmmLambda, Knm)
+        Knm_KmmLambdaInv_Kmn = tf.matmul(Knm, KmmLambdaInv_Kmn, transpose_b=True)
+
+        if not full_cov:
+            fvar = Knn - tf.linalg.diag_part(Knm_KmmLambdaInv_Kmn)
+            fvar = fvar[:, None]
+        else:
+            fvar = Knn - Knm_KmmLambdaInv_Kmn
+            fvar = fvar[None, ...]
+
+        fmu = tf.matmul(Knm, KmmLambdaInv_u, transpose_b=True)
+        predict_mu = fmu + self.mean_function(Xnew)
+        predict_var = fvar
+        return predict_mu, predict_var
+
+
+class PathwiseClusterGP(ClusterGP):
     def elbo(
         self,
         data: gpflow.base.RegressionData,
@@ -239,7 +315,6 @@ class PathwiseClusterSVGP(ClusterSVGP):
         likelihood = noise_inv * tf.reduce_sum(error_squared) / num_samples
         constant_term = num_data * tf.math.log(2.0 * np.pi * noise)
         return -0.5 * (likelihood + constant_term)
-
 
     def pathwise_samples(self, sample_at: Tensor, num_bases: int, num_samples: int) -> Tensor:
         u = self.pseudo_u

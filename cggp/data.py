@@ -1,9 +1,18 @@
+from typing import Tuple, NamedTuple
+from collections import namedtuple
 from pathlib import Path
 import numpy as np
 import shutil
 from zipfile import ZipFile
 from io import BytesIO
 import urllib.request
+
+import bayesian_benchmarks.data as bbd
+import tensorflow as tf
+from gpflow.config import default_float
+
+Dataset = Tuple[np.ndarray, np.ndarray]
+DatasetBundle = namedtuple("DatasetBundle", "name, train, test")
 
 
 def download_and_upzip_file(outpath, url):
@@ -35,7 +44,6 @@ def snelson1d(target_dir: str = ".datasets/snelson1d"):
     inputs_path = Path(target_dir_path, "snelson_train_inputs")
     outputs_path = Path(target_dir_path, "snelson_train_outputs")
 
-
     if not (inputs_path.exists() and outputs_path.exists()):
         download_and_upzip_file(target_dir_path, data_url)
 
@@ -49,4 +57,46 @@ def snelson1d(target_dir: str = ".datasets/snelson1d"):
     X = np.loadtxt(inputs_path)[:, None]
     Y = np.loadtxt(outputs_path)[:, None]
 
-    return (X, Y), (X, Y) 
+    return (X, Y), (X, Y)
+
+
+def norm(x: np.ndarray) -> np.ndarray:
+    """Normalise array with mean and variance."""
+    mu = np.mean(x, axis=0, keepdims=True)
+    std = np.std(x, axis=0, keepdims=True) + 1e-6
+    return (x - mu) / std, mu, std
+
+
+def norm_dataset(data: Dataset) -> Dataset:
+    """Normalise dataset tuple."""
+    return norm(data[0]), norm(data[1])
+
+
+def load_data(name: str, as_tensor: bool = False) -> DatasetBundle:
+    if name == "snelson1d":
+        train, test = snelson1d("~/.dataset/snelson1d/")
+    else:
+        uci_name = name
+        if not name.startswith("Wilson_"):
+            uci_name = f"Wilson_{name}"
+
+        dat = getattr(bbd, uci_name)(prop=0.67)
+        train, test = (dat.X_train, dat.Y_train), (dat.X_test, dat.Y_test)
+
+    (x_train, x_mu, x_std), (y_train, y_mu, y_std) = norm_dataset(train)
+    x_test = (test[0] - x_mu) / x_std
+    y_test = (test[1] - y_mu) / y_std
+
+    x_train = _to_float(x_train, as_tensor=as_tensor)
+    y_train = _to_float(y_train, as_tensor=as_tensor)
+    x_test = _to_float(x_test, as_tensor=as_tensor)
+    y_test = _to_float(y_test, as_tensor=as_tensor)
+
+    return DatasetBundle(name, (x_train, y_train), (x_test, y_test))
+
+
+def _to_float(arr: np.ndarray, as_tensor: bool):
+    dtype = default_float()
+    if as_tensor:
+        return tf.convert_to_tensor(arr, dtype=dtype)
+    return arr.astype(dtype)

@@ -1,7 +1,8 @@
+from functools import partial
 import numpy as np
 import gpflow
 import tensorflow as tf
-from conjugate_gradient import conjugate_gradient
+from conjugate_gradient import conjugate_gradient, EyePreconditioner
 import matplotlib.pyplot as plt
 
 
@@ -21,7 +22,6 @@ def conjugate_gradient_playground():
     y = y.T
     initial_solution = np.random.rand(1, n)
     error_threshold = 0.01
-    max_iterations = 1000
 
     n_test = n * 10
     x_test = np.linspace(x.min(), x.max(), n_test).reshape(-1, 1)
@@ -37,7 +37,19 @@ def conjugate_gradient_playground():
     print(f"Eigenvalues: min={min_eig_val:0.4f}, max={max_eig_val:0.4f}")
     print(f"Condition number {condition_number:0.4f}")
 
-    solution, stats = conjugate_gradient(kxx, y, initial_solution, error_threshold, max_iterations)
+    preconditioner = EyePreconditioner()
+    cg_partial = partial(conjugate_gradient, preconditioner=preconditioner)
+    cg = tf.function(cg_partial)
+
+    y_tf = tf.convert_to_tensor(y, dtype=kxx.dtype)
+    initial_solution_tf = tf.convert_to_tensor(initial_solution, dtype=kxx.dtype)
+
+    solution, stats = cg(
+        kxx,
+        y_tf,
+        initial_solution_tf,
+        error_threshold,
+    )
 
     solution_base = tf.linalg.solve(kxx, y.T)
 
@@ -65,11 +77,11 @@ def conjugate_gradient_playground():
     ax1.plot(x_test, f_test, color="tab:blue")
 
     for i in range(n):
-        ax2.plot(x_test, solution[i,0] * k_test[:,i], alpha=0.5)
+        ax2.plot(x_test, solution[i, 0] * k_test[:, i], alpha=0.5)
     ax2.stem(x, solution, markerfmt=" ")
 
     for i in range(n):
-        ax3.plot(x_test, solution_base[i,0] * k_test[:,i], alpha=0.5)
+        ax3.plot(x_test, solution_base[i, 0] * k_test[:, i], alpha=0.5)
     ax3.stem(x, solution_base, markerfmt=" ")
 
     ax1.set_title("Data and regression curve")

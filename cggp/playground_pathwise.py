@@ -1,11 +1,11 @@
 from pathlib import Path
-from models import ClusterSVGP, PathwiseClusterSVGP
+from models import ClusterGP, PathwiseClusterGP
 from data import snelson1d
 import tensorflow as tf
 import numpy as np
 from numpy import newaxis
 
-from playground_util import create_model, train_using_lbfgs_and_varpar_update
+from playground_util import create_model, train_using_lbfgs_and_update
 
 import matplotlib.pyplot as plt
 
@@ -25,7 +25,7 @@ def setup():
 
     x, y = train_data
 
-    model_class = ClusterSVGP
+    model_class = ClusterGP
     data, experimental_model, clustering_fn, distance_fn = create_model(
         (x, y),
         num_inducing_points,
@@ -34,14 +34,14 @@ def setup():
     )
 
     num_iterations = 100
-    opt_res = train_using_lbfgs_and_varpar_update(
+    opt_res = train_using_lbfgs_and_update(
         data,
         experimental_model,
         clustering_fn,
         num_iterations,
     )
 
-    pathwise_model = PathwiseClusterSVGP(
+    pathwise_model = PathwiseClusterGP(
         experimental_model.kernel,
         experimental_model.likelihood,
         experimental_model.inducing_variable,
