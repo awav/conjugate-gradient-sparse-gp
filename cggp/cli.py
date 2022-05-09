@@ -181,8 +181,11 @@ def train_cggp_adam(
         conjugate_gradient = ConjugateGradient(error_threshold)
         return CGGP(kernel, likelihood, iv, conjugate_gradient, **kwargs)
 
+    clustering_type = "kmeans"
     model = create_model(model_fn, kernel_fn, train_data, num_inducing_points)
-    update_fn = create_update_fn(model, train_data, num_inducing_points, use_jit=jit)
+    update_fn = create_update_fn(
+        clustering_type, model, train_data, num_inducing_points, use_jit=jit
+    )
     monitor_batch_size = batch_size * 5
     monitor = create_monitor(model, test_data, monitor_batch_size, use_jit=jit)
 
