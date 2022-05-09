@@ -1,4 +1,5 @@
-from typing import Callable, Optional
+from pathlib import Path
+from typing import Callable, Optional, Union
 import numpy as np
 import tensorflow as tf
 import gpflow
@@ -10,9 +11,7 @@ from utils import jit
 from monitor import Monitor
 
 
-def covertree_update_inducing_parameters(
-    model, data, distance_fn
-):
+def covertree_update_inducing_parameters(model, data, distance_fn):
     covertree = ModifiedCoverTree(distance_fn, data)
     new_iv = covertree.centroids
     means, counts = covertree.cluster_mean_and_counts
@@ -187,7 +186,7 @@ def make_print_callback():
     def print_callback(step: int, *args, **kwargs):
         click.echo(f"Step: {step}")
         return {}
-    
+
     return print_callback
 
 
@@ -195,6 +194,7 @@ def make_param_callback(model):
     """
     Callback for tracking parameters in TensorBoard
     """
+
     def _callback(*args, **kwargs):
         ks = {
             f"kernel/{k.strip('.')}": v.numpy() for (k, v) in parameter_dict(model.kernel).items()
@@ -255,8 +255,14 @@ def transform_to_dataset(
     return data
 
 
-def create_monitor(model, data, batch_size, use_jit: bool = True) -> Monitor:
-    monitor = Monitor("./logs-default")
+def create_monitor(
+    model,
+    data,
+    batch_size,
+    logdir: Union[str, Path] = "./logs-default/",
+    use_jit: bool = True,
+) -> Monitor:
+    monitor = Monitor(logdir)
     print_callback = make_print_callback()
     param_callback = make_param_callback(model)
     metric_callback = make_metrics_callback(model, data, batch_size, use_jit=use_jit)

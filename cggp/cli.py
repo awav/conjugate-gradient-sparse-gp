@@ -97,7 +97,7 @@ class KernelType(click.ParamType):
 @dataclass
 class EntryContext:
     seed: int
-    monitor: Monitor
+    logdir: Union[Path, str]
     dataset: DatasetBundle
     kernel_fn: Callable
     jit: bool
@@ -124,10 +124,9 @@ def main(
     np.random.seed(seed)
     tf.random.set_seed(seed)
 
-    monitor = Monitor(logdir)
     obj = EntryContext(
         seed,
-        monitor,
+        logdir,
         dataset,
         kernel,
         jit,
@@ -168,6 +167,8 @@ def train_cggp_adam(
         "num_inducing_points": num_inducing_points,
         "num_iterations": num_iterations,
         "use_jit": jit,
+        "learning_rate": learning_rate,
+        "logdir": obj.logdir,
         "batch_size": batch_size,
         "train_size": train_data[0].shape[0],
         "test_size": test_data[0].shape[0],

@@ -5,7 +5,8 @@ import numpy as np
 import tensorflow as tf
 
 from gpflow.config import default_float
-from kmeans import kmeans_lloyd, create_kernel_distance_fn
+from kmeans import kmeans_lloyd
+from distance import create_kernel_distance_fn
 from optimize import kmeans_update_inducing_parameters, covertree_update_inducing_parameters
 from utils import jit
 

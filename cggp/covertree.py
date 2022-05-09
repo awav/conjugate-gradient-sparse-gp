@@ -6,6 +6,8 @@ import matplotlib.pyplot as plt
 import math
 
 
+Tensor = tf.Tensor
+
 class CoverTreeNode:
     def __init__(
         self,
