@@ -175,8 +175,8 @@ def train_using_adam_and_update(
         update_fn()
         monitor_wrapper(iteration)
 
-    if monitor is not None:
-        monitor.flush()
+        if monitor is not None:
+            monitor.flush()
 
     return
 
@@ -256,7 +256,7 @@ def transform_to_dataset(
 
 
 def create_monitor(model, data, batch_size, use_jit: bool = True) -> Monitor:
-    monitor = Monitor("./default_logdir")
+    monitor = Monitor("./logs-default")
     print_callback = make_print_callback()
     param_callback = make_param_callback(model)
     metric_callback = make_metrics_callback(model, data, batch_size, use_jit=use_jit)
