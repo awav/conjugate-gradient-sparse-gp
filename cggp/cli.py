@@ -156,6 +156,7 @@ def train_cggp_adam(
     obj: EntryContext = ctx.obj
     dataset = obj.dataset
     jit = obj.jit
+    logdir = obj.logdir
     kernel_fn = obj.kernel_fn
     train_data = dataset.train
     test_data = dataset.test
@@ -168,7 +169,7 @@ def train_cggp_adam(
         "num_iterations": num_iterations,
         "use_jit": jit,
         "learning_rate": learning_rate,
-        "logdir": obj.logdir,
+        "logdir": logdir,
         "batch_size": batch_size,
         "train_size": train_data[0].shape[0],
         "test_size": test_data[0].shape[0],
@@ -188,7 +189,7 @@ def train_cggp_adam(
         clustering_type, model, train_data, num_inducing_points, use_jit=jit
     )
     monitor_batch_size = batch_size * 5
-    monitor = create_monitor(model, test_data, monitor_batch_size, use_jit=jit)
+    monitor = create_monitor(model, test_data, monitor_batch_size, logdir=logdir, use_jit=jit)
 
     train_using_adam_and_update(
         train_data,
