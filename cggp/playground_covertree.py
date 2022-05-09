@@ -4,10 +4,9 @@ import matplotlib.pyplot as plt
 
 if __name__ == "__main__":
     data = np.random.rand(200, 2)
-    minimum_radius = 0.1
-    num_levels = 5
-    tree = ModifiedCoverTree(euclid_distance, data, num_levels)
-    fig, axes = plt.subplots(1, num_levels, figsize=((6 * num_levels, 6)))
+    min_radius = 0.1
+    tree = ModifiedCoverTree(euclid_distance, data, min_radius=min_radius)
+    fig, axes = plt.subplots(1, len(tree.levels), figsize=((6 * len(tree.levels), 6)))
     for level in range(len(tree.levels)):
         ax = axes[level]
         for node in tree.levels[level]:
@@ -20,6 +19,7 @@ if __name__ == "__main__":
             ax.add_patch(circle)
             ax.set_xlim([-0.125, 1.125])
             ax.set_ylim([-0.125, 1.125])
+            ax.set_title(f"$R_{level} = {radius}$".format(level = level, radius = node.radius))
 
     plt.savefig("covertree.pdf")
     plt.show()
