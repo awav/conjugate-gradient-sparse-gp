@@ -171,13 +171,12 @@ def train_using_adam_and_update(
 
     for iteration in range(iterations):
         optimize_step()
-        update_fn()
+        # TODO(@awav): uncomment this if clustering should run at each iteration!
+        # update_fn()
         monitor_wrapper(iteration)
 
         if monitor is not None:
             monitor.flush()
-
-    return
 
 
 def make_print_callback():
@@ -208,36 +207,43 @@ def make_param_callback(model):
     return _callback
 
 
-def make_metrics_callback(model, data, batch_size: int, use_jit: bool = True):
+def make_metrics_callback(model, train_data, test_data, batch_size: int, use_jit: bool = True):
     """
     Callback for computing test metrics (RMSE and NLPD)
     """
-    dataset = transform_to_dataset(data, batch_size, repeat=False)
+    test_dataset = transform_to_dataset(test_data, batch_size, repeat=False)
+    train_dataset = transform_to_dataset(train_data, batch_size, repeat=False)
 
     @jit(use_jit)
-    def metrics_fn(data):
+    def test_metrics_fn(data):
         x, y = data
-        elbo = model.elbo(data)
         mu, var = model.predict_f(x)
         lpd = model.likelihood.predict_log_density(mu, var, y)
         lpd = tf.reduce_sum(lpd)
         error = y - mu
-        return elbo, error, lpd
+        return error, lpd
+
+    @jit(use_jit)
+    def train_metrics_fn(data):
+        return model.elbo(data)
 
     def step_callback(step, *args, **kwargs):
         error = np.array([]).reshape(-1, 1)
         lpd = 0.0
         elbo = 0.0
 
-        for batch in dataset:
-            batch_elbo, batch_error, batch_log_density = metrics_fn(batch)
-            elbo += batch_elbo.numpy()
+        for batch in test_dataset:
+            batch_error, batch_log_density = test_metrics_fn(batch)
             lpd += batch_log_density.numpy()
             error = np.concatenate([error, batch_error.numpy()], axis=0)
 
+        for batch in train_dataset:
+            batch_elbo = train_metrics_fn(batch)
+            elbo += batch_elbo.numpy()
+
         rmse = np.sqrt(np.mean(error**2))
         nlpd = -lpd
-        return {"test/rmse": rmse, "test/nlpd": nlpd}
+        return {"train/elbo": elbo, "test/rmse": rmse, "test/nlpd": nlpd}
 
     return step_callback
 
@@ -257,7 +263,8 @@ def transform_to_dataset(
 
 def create_monitor(
     model,
-    data,
+    train_data,
+    test_data,
     batch_size,
     logdir: Union[str, Path] = "./logs-default/",
     use_jit: bool = True,
@@ -265,7 +272,7 @@ def create_monitor(
     monitor = Monitor(logdir)
     print_callback = make_print_callback()
     param_callback = make_param_callback(model)
-    metric_callback = make_metrics_callback(model, data, batch_size, use_jit=use_jit)
+    metric_callback = make_metrics_callback(model, train_data, test_data, batch_size, use_jit=use_jit)
     monitor.add_callback("print", print_callback)
     monitor.add_callback("params", param_callback)
     monitor.add_callback("metrics", metric_callback, record_step=5)

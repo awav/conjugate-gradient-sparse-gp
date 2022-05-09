@@ -62,6 +62,7 @@ def kmeans_lloyd(
     if initial_centroids is None:
         initial_centroid_indices = tf.random.shuffle(tf.range(points.shape[0]))[:k_centroids]
         initial_centroids = tf.gather(points, initial_centroid_indices)
+
     inf = tf.convert_to_tensor(np.inf, dtype=points.dtype)
     initial_args = body(initial_centroids, inf, None)
     centroids, mean_distance, _ = tf.while_loop(cond, body, initial_args)
