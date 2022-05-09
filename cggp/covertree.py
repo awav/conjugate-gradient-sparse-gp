@@ -1,41 +1,9 @@
+from typing import Tuple, List
 import gpflow
 from typing import Callable, Literal, Optional
 import tensorflow as tf
 import matplotlib.pyplot as plt
 import math
-
-Tensor = tf.Tensor
-DistanceType = Literal["Euclidean", "covariance", "correlation"]
-
-
-def create_kernel_distance_fn(kernel: gpflow.kernels.Kernel, distance_type: DistanceType):
-    def cov(args):
-        x, y = args
-        x_dist = kernel(x, full_cov=False)
-        y_dist = kernel(
-            y, y
-        )  # TODO(awav): apparently, gpflow kernel works inconsistently for different shapes with full_cov=False.
-        xy_dist = kernel(x, y)
-        distance = x_dist + y_dist - 2 * xy_dist
-        return distance
-
-    def cor(args):
-        x, y = args
-        x_dist = kernel(x, full_cov=False)
-        y_dist = kernel(
-            y, y
-        )  # TODO(awav): apparently, gpflow kernel works inconsistently for different shapes with full_cov=False.
-        xy_dist = kernel(x, y)
-        return 1.0 - xy_dist / tf.sqrt(x_dist * y_dist)
-
-    functions = {"covariance": cov, "correlation": cor}
-    func = functions[distance_type]
-    return func
-
-
-def euclid_distance(args):
-    x, y = args
-    return tf.linalg.norm(x - y, axis=-1)
 
 
 class CoverTreeNode:
@@ -64,6 +32,7 @@ class CoverTreeNode:
         ax.add_patch(circle)
         plt.show()
 
+
 class ModifiedCoverTree:
     def __init__(
         self,
@@ -74,22 +43,18 @@ class ModifiedCoverTree:
     ):
         self.distance = distance
 
-        data = tf.convert_to_tensor(data)
+        x, y = data
+        x = tf.convert_to_tensor(x, dtype=x.dtype)
+        y = tf.convert_to_tensor(y, dtype=y.dtype)
+        data = (x, y)
 
-        root_mean = tf.math.reduce_mean(data, axis=-2)
-        root_distances = self.distance((root_mean, data))
-        max_radius = tf.math.reduce_mean(root_distances)
-
-        print(max_radius)
-        print(max_radius / min_radius)
-        print(tf.math.log(max_radius / min_radius) / math.log(2))
+        root_mean = tf.reduce_mean(x, axis=-2)
+        root_distances = self.distance((root_mean, x))
+        max_radius = tf.reduce_mean(root_distances)
 
         if min_radius is not None:
             num_levels = math.ceil(math.log2(max_radius / min_radius)) + 2
-            max_radius = min_radius * (2**(num_levels-1))
-
-        print(num_levels)
-        print(max_radius)
+            max_radius = min_radius * (2 ** (num_levels - 1))
 
         node = CoverTreeNode(root_mean, max_radius, None, data)
         self.levels = [[] for _ in range(num_levels)]
@@ -98,16 +63,36 @@ class ModifiedCoverTree:
         for level in range(1, num_levels):
             radius = max_radius / (2**level)
             for node in self.levels[level - 1]:
-                active_data = node.data
-                while len(active_data) > 0:
-                    point = (0.75 * active_data[0]) + (0.25 * node.point)
-                    distances = self.distance((point, active_data))
+                active_x, active_y = node.data
+                while tf.shape(active_x)[0] > 0:
+                    point = (0.75 * active_x[0]) + (0.25 * node.point)
+                    distances = self.distance((point, active_x))
                     indices = distances <= radius
-                    neighborhood = tf.boolean_mask(active_data, indices)
+                    neighborhood_x = tf.boolean_mask(active_x, indices)
+                    neighborhood_y = tf.boolean_mask(active_y, indices)
+                    neighborhood = (neighborhood_x, neighborhood_y)
                     child = CoverTreeNode(point, radius, node, neighborhood)
                     self.levels[level].append(child)
                     node.children.append(child)
-                    active_data = tf.boolean_mask(active_data, ~indices)
-    
-    def inducing_points(self):
+                    n = tf.shape(active_x)[0]
+                    active_x = tf.boolean_mask(active_x, ~indices)
+                    active_y = tf.boolean_mask(active_y, ~indices)
+
+    @property
+    def centroids(self):
         return tf.stack([node.point for node in self.levels[-1]])
+
+    @property
+    def cluster_ys(self) -> List[Tensor]:
+        ys = [node.data[1] for node in self.levels[-1]]
+        return ys
+
+    @property
+    def cluster_mean_and_counts(self) -> Tuple[Tensor, Tensor]:
+        means_and_counts = [
+            (tf.reduce_mean(node.data[1]), tf.shape(node.data[1])[0]) for node in self.levels[-1]
+        ]
+        dtype = self.levels[-1][0].data[1].dtype
+        means, counts = zip(*means_and_counts)
+        ctt = tf.convert_to_tensor
+        return ctt(means, dtype=dtype), ctt(counts, dtype=dtype)

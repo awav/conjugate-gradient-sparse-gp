@@ -4,9 +4,24 @@ import tensorflow as tf
 import gpflow
 from gpflow.utilities import parameter_dict
 from kmeans import kmeans_indices_and_distances
+from covertree import ModifiedCoverTree
 from models import ClusterGP
 from utils import jit
 from monitor import Monitor
+
+
+def covertree_update_inducing_parameters(
+    model, data, distance_fn
+):
+    covertree = ModifiedCoverTree(distance_fn, data)
+    new_iv = covertree.centroids
+    means, counts = covertree.cluster_mean_and_counts
+    sigma2 = model.likelihood.variance
+    lambda_diag = sigma2 / counts
+
+    model.inducing_variable.Z.assign(new_iv)
+    model.pseudo_u.assign(means)
+    model.diag_variance.assign(lambda_diag)
 
 
 def kmeans_update_inducing_parameters(
