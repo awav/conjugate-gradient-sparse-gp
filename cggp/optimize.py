@@ -1,12 +1,26 @@
-from typing import Callable, Optional
+from pathlib import Path
+from typing import Callable, Optional, Union
 import numpy as np
 import tensorflow as tf
 import gpflow
 from gpflow.utilities import parameter_dict
 from kmeans import kmeans_indices_and_distances
+from covertree import ModifiedCoverTree
 from models import ClusterGP
 from utils import jit
 from monitor import Monitor
+
+
+def covertree_update_inducing_parameters(model, data, distance_fn):
+    covertree = ModifiedCoverTree(distance_fn, data)
+    new_iv = covertree.centroids
+    means, counts = covertree.cluster_mean_and_counts
+    sigma2 = model.likelihood.variance
+    lambda_diag = sigma2 / counts
+
+    model.inducing_variable.Z.assign(new_iv)
+    model.pseudo_u.assign(means)
+    model.diag_variance.assign(lambda_diag)
 
 
 def kmeans_update_inducing_parameters(
@@ -157,13 +171,12 @@ def train_using_adam_and_update(
 
     for iteration in range(iterations):
         optimize_step()
-        update_fn()
+        # TODO(@awav): uncomment this if clustering should run at each iteration!
+        # update_fn()
         monitor_wrapper(iteration)
 
         if monitor is not None:
             monitor.flush()
-
-    return
 
 
 def make_print_callback():
@@ -172,7 +185,7 @@ def make_print_callback():
     def print_callback(step: int, *args, **kwargs):
         click.echo(f"Step: {step}")
         return {}
-    
+
     return print_callback
 
 
@@ -180,6 +193,7 @@ def make_param_callback(model):
     """
     Callback for tracking parameters in TensorBoard
     """
+
     def _callback(*args, **kwargs):
         ks = {
             f"kernel/{k.strip('.')}": v.numpy() for (k, v) in parameter_dict(model.kernel).items()
@@ -193,36 +207,43 @@ def make_param_callback(model):
     return _callback
 
 
-def make_metrics_callback(model, data, batch_size: int, use_jit: bool = True):
+def make_metrics_callback(model, train_data, test_data, batch_size: int, use_jit: bool = True):
     """
     Callback for computing test metrics (RMSE and NLPD)
     """
-    dataset = transform_to_dataset(data, batch_size, repeat=False)
+    test_dataset = transform_to_dataset(test_data, batch_size, repeat=False)
+    train_dataset = transform_to_dataset(train_data, batch_size, repeat=False)
 
     @jit(use_jit)
-    def metrics_fn(data):
+    def test_metrics_fn(data):
         x, y = data
-        elbo = model.elbo(data)
         mu, var = model.predict_f(x)
         lpd = model.likelihood.predict_log_density(mu, var, y)
         lpd = tf.reduce_sum(lpd)
         error = y - mu
-        return elbo, error, lpd
+        return error, lpd
+
+    @jit(use_jit)
+    def train_metrics_fn(data):
+        return model.elbo(data)
 
     def step_callback(step, *args, **kwargs):
         error = np.array([]).reshape(-1, 1)
         lpd = 0.0
         elbo = 0.0
 
-        for batch in dataset:
-            batch_elbo, batch_error, batch_log_density = metrics_fn(batch)
-            elbo += batch_elbo.numpy()
+        for batch in test_dataset:
+            batch_error, batch_log_density = test_metrics_fn(batch)
             lpd += batch_log_density.numpy()
             error = np.concatenate([error, batch_error.numpy()], axis=0)
 
+        for batch in train_dataset:
+            batch_elbo = train_metrics_fn(batch)
+            elbo += batch_elbo.numpy()
+
         rmse = np.sqrt(np.mean(error**2))
         nlpd = -lpd
-        return {"test/rmse": rmse, "test/nlpd": nlpd}
+        return {"train/elbo": elbo, "test/rmse": rmse, "test/nlpd": nlpd}
 
     return step_callback
 
@@ -240,11 +261,18 @@ def transform_to_dataset(
     return data
 
 
-def create_monitor(model, data, batch_size, use_jit: bool = True) -> Monitor:
-    monitor = Monitor("./logs-default")
+def create_monitor(
+    model,
+    train_data,
+    test_data,
+    batch_size,
+    logdir: Union[str, Path] = "./logs-default/",
+    use_jit: bool = True,
+) -> Monitor:
+    monitor = Monitor(logdir)
     print_callback = make_print_callback()
     param_callback = make_param_callback(model)
-    metric_callback = make_metrics_callback(model, data, batch_size, use_jit=use_jit)
+    metric_callback = make_metrics_callback(model, train_data, test_data, batch_size, use_jit=use_jit)
     monitor.add_callback("print", print_callback)
     monitor.add_callback("params", param_callback)
     monitor.add_callback("metrics", metric_callback, record_step=5)

@@ -1,10 +1,9 @@
 from typing import Callable, Optional, TypeVar
 from functools import partial
+from distance import create_kernel_distance_fn, DistanceType
 from kmeans import (
     kmeans_lloyd,
     kmeans_indices_and_distances,
-    create_kernel_distance_fn,
-    DistanceType,
 )
 from models import LpSVGP, ClusterGP
 import gpflow

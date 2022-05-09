@@ -97,7 +97,7 @@ class KernelType(click.ParamType):
 @dataclass
 class EntryContext:
     seed: int
-    monitor: Monitor
+    logdir: Union[Path, str]
     dataset: DatasetBundle
     kernel_fn: Callable
     jit: bool
@@ -124,10 +124,9 @@ def main(
     np.random.seed(seed)
     tf.random.set_seed(seed)
 
-    monitor = Monitor(logdir)
     obj = EntryContext(
         seed,
-        monitor,
+        str(logdir),
         dataset,
         kernel,
         jit,
@@ -157,6 +156,7 @@ def train_cggp_adam(
     obj: EntryContext = ctx.obj
     dataset = obj.dataset
     jit = obj.jit
+    logdir = obj.logdir
     kernel_fn = obj.kernel_fn
     train_data = dataset.train
     test_data = dataset.test
@@ -168,6 +168,8 @@ def train_cggp_adam(
         "num_inducing_points": num_inducing_points,
         "num_iterations": num_iterations,
         "use_jit": jit,
+        "learning_rate": learning_rate,
+        "logdir": logdir,
         "batch_size": batch_size,
         "train_size": train_data[0].shape[0],
         "test_size": test_data[0].shape[0],
@@ -181,10 +183,15 @@ def train_cggp_adam(
         conjugate_gradient = ConjugateGradient(error_threshold)
         return CGGP(kernel, likelihood, iv, conjugate_gradient, **kwargs)
 
+    clustering_type = "kmeans"
     model = create_model(model_fn, kernel_fn, train_data, num_inducing_points)
-    update_fn = create_update_fn(model, train_data, num_inducing_points, use_jit=jit)
+    update_fn = create_update_fn(
+        clustering_type, model, train_data, num_inducing_points, use_jit=jit
+    )
     monitor_batch_size = batch_size * 5
-    monitor = create_monitor(model, test_data, monitor_batch_size, use_jit=jit)
+    monitor = create_monitor(
+        model, train_data, test_data, monitor_batch_size, logdir=logdir, use_jit=jit
+    )
 
     train_using_adam_and_update(
         train_data,
