@@ -126,7 +126,7 @@ def main(
 
     obj = EntryContext(
         seed,
-        logdir,
+        str(logdir),
         dataset,
         kernel,
         jit,
