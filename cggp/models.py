@@ -102,7 +102,7 @@ class LpSVGP(gpflow.models.GPModel, gpflow.models.ExternalDataTrainingLossMixin)
         L = tf.linalg.cholesky(K)
         A = tf.linalg.triangular_solve(L, Kmn)
 
-        if full_cov:
+        if not full_cov:
             fvar = (Knn - tf.reduce_sum(tf.square(A), axis=0))[:, None]
         else:
             fvar = Knn - tf.matmul(A, A, transpose_a=True)

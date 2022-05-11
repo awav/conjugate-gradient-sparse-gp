@@ -1,5 +1,5 @@
 from kmeans import kmeans_indices_and_distances
-from models import ClusterGP, CGGP
+from models import ClusterGP, CGGP, LpSVGP
 from conjugate_gradient import ConjugateGradient
 from data import snelson1d, load_data
 import matplotlib.pyplot as plt
@@ -13,6 +13,7 @@ from optimize import (
     kmeans_update_inducing_parameters,
     train_using_lbfgs_and_update,
     train_using_adam_and_update,
+    create_monitor,
 )
 
 
@@ -21,75 +22,134 @@ if __name__ == "__main__":
     np.random.seed(seed)
     tf.random.set_seed(seed)
 
-    train_data, _ = snelson1d()
+    _, train_data, test_data = load_data("elevators")
     distance_type = "covariance"
-    num_inducing_points = 20
+    num_inducing_points = 500
     num_iterations = 1000
 
+    slice_size = 5000
     x, y = train_data
+    x = x[:slice_size]
+    y = y[:slice_size]
 
-    xmin = x.min() - 1.0
-    xmax = x.max() + 1.0
-    num_test_points = 100
-    x_test = np.linspace(xmin, xmax, num_test_points).reshape(-1, 1)
-
-    # NOTE:
-    # Model setup
-    #   `model_class` switches between different models
-    #   as well as training procedures.
-    #   Available options are LpSVGP and ClusterGP.
-
-    # model_class = LpSVGP
-    # model_class = CGGP
-
-    def model_class(kernel, likelihood, iv):
+    def model_class(kernel, likelihood, iv, **kwargs):
         error_threshold = 1e-3
         conjugate_gradient = ConjugateGradient(error_threshold)
-        return CGGP(kernel, likelihood, iv, conjugate_gradient)
+        return CGGP(kernel, likelihood, iv, conjugate_gradient, **kwargs)
 
-    data, experimental_model, clustering_fn, distance_fn = create_model(
+    data, cggp, clustering_fn, distance_fn = create_model(
         (x, y),
         num_inducing_points,
         distance_type,
         model_class,
     )
 
-    def update_fn():
-        kmeans_update_inducing_parameters(experimental_model, data, distance_fn, clustering_fn)
+    _, clustergp, _, _ = create_model(
+        (x, y),
+        num_inducing_points,
+        distance_type,
+        ClusterGP,
+    )
 
-    update_fn()
+    _, lpsvgp, _, _ = create_model(
+        (x, y),
+        num_inducing_points,
+        distance_type,
+        LpSVGP,
+    )
 
-    xt, _ = data
+    iv, means, lambda_diag = kmeans_update_inducing_parameters(
+        cggp, data, distance_fn, clustering_fn
+    )
 
-    num_iterations = 100
-    batch_size = 25
+    lpsvgp.inducing_variable.Z.assign(iv)
+
+    cggp.inducing_variable.Z.assign(iv)
+    cggp.diag_variance.assign(lambda_diag)
+    cggp.pseudo_u.assign(lambda_diag)
+
+    clustergp.inducing_variable.Z.assign(iv)
+    clustergp.diag_variance.assign(lambda_diag)
+    clustergp.pseudo_u.assign(lambda_diag)
+
+    num_iterations = 1000
+    batch_size = 500
+    monitor_batch_size = 1000
     learning_rate = 0.01
-    use_jit = False
+    use_jit = True
+    use_tb = True
+    logdir = "./logs-compare-playground"
 
-    opt_result = train_using_adam_and_update(
+    logdir_cggp = f"{logdir}/cggp"
+    monitor_cggp = create_monitor(
+        cggp,
+        train_data,
+        test_data,
+        monitor_batch_size,
+        use_tensorboard=use_tb,
+        logdir=logdir_cggp,
+    )
+    train_using_adam_and_update(
         data,
-        experimental_model,
+        cggp,
         num_iterations,
         batch_size,
         learning_rate,
-        update_fn,
+        update_fn=None,
+        update_during_training=False,
         use_jit=use_jit,
+        monitor=monitor_cggp,
     )
 
-    # opt_result = train_using_lbfgs_and_update(
-    #     data,
-    #     experimental_model,
-    #     clustering_fn,
-    #     num_iterations,
-    #     distance_fn=distance_fn,
-    #     use_jit=use_jit,
-    # )
+    logdir_clustergp = f"{logdir}/clustergp"
+    monitor_clustergp = create_monitor(
+        clustergp,
+        train_data,
+        test_data,
+        monitor_batch_size,
+        use_tensorboard=use_tb,
+        logdir=logdir_clustergp,
+    )
+    train_using_adam_and_update(
+        data,
+        clustergp,
+        num_iterations,
+        batch_size,
+        learning_rate,
+        update_fn=None,
+        update_during_training=False,
+        use_jit=use_jit,
+        monitor=monitor_clustergp,
+    )
+
+    logdir_lpsvgp = f"{logdir}/lpsvgp"
+    monitor_lpsvgp = create_monitor(
+        lpsvgp,
+        train_data,
+        test_data,
+        monitor_batch_size,
+        use_tensorboard=use_tb,
+        logdir=logdir_lpsvgp,
+    )
+    train_using_adam_and_update(
+        data,
+        lpsvgp,
+        num_iterations,
+        batch_size,
+        learning_rate,
+        update_fn=None,
+        update_during_training=False,
+        use_jit=use_jit,
+        monitor=monitor_lpsvgp,
+    )
 
     print("Optimization results: ")
     print(opt_result)
 
     kernel = experimental_model.kernel
     noise = experimental_model.likelihood.variance.numpy()
+
+    gpr_model = gpflow.models.GPR(train_data, kernel=kernel, noise_variance=noise)
 
     cluster_model = ClusterGP(
         experimental_model.kernel,
@@ -99,7 +159,9 @@ if __name__ == "__main__":
         diag_variance=experimental_model.diag_variance,
     )
 
-    gpr_model = gpflow.models.GPR(train_data, kernel=kernel, noise_variance=noise)
+    lpsvgp = LpSVGP(
+        experimental_model.kernel,
+    )
 
     # Plot #0
     fig, (ax1, ax2, ax3) = plt.subplots(3, 1)

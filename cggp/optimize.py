@@ -1,17 +1,25 @@
 from pathlib import Path
-from typing import Callable, Optional, Union
+from typing import Callable, Optional, Union, Tuple
 import numpy as np
 import tensorflow as tf
 import gpflow
 from gpflow.utilities import parameter_dict
+import tensorflow as tf
 from kmeans import kmeans_indices_and_distances
 from covertree import ModifiedCoverTree
-from models import ClusterGP
+from models import ClusterGP, LpSVGP
 from utils import jit
 from monitor import Monitor
 
 
-def covertree_update_inducing_parameters(model, data, distance_fn):
+Tensor = tf.Tensor
+
+
+def covertree_update_inducing_parameters(
+    model,
+    data,
+    distance_fn,
+) -> Tuple[Tensor, Tensor, Tensor]:
     covertree = ModifiedCoverTree(distance_fn, data)
     new_iv = covertree.centroids
     means, counts = covertree.cluster_mean_and_counts
@@ -22,10 +30,12 @@ def covertree_update_inducing_parameters(model, data, distance_fn):
     model.pseudo_u.assign(means)
     model.diag_variance.assign(lambda_diag)
 
+    return new_iv, means, lambda_diag
+
 
 def kmeans_update_inducing_parameters(
     model, data, distance_fn: Optional[Callable], clustering_fn: Callable
-) -> None:
+) -> Tuple[Tensor, Tensor, Tensor]:
     x, y = data
     new_iv = clustering_fn()
 
@@ -45,6 +55,8 @@ def kmeans_update_inducing_parameters(
     model.inducing_variable.Z.assign(new_iv)
     model.pseudo_u.assign(u)
     model.diag_variance.assign(lambda_diag)
+
+    return new_iv, u, lambda_diag
 
 
 def train_vanilla_using_lbfgs_and_standard_ip_update(
@@ -133,11 +145,11 @@ def train_using_lbfgs_and_update(
 
 def train_using_adam_and_update(
     data,
-    model: ClusterGP,
+    model: LpSVGP,
     iterations: int,
     batch_size: int,
     learning_rate: float,
-    update_fn: Callable,
+    update_fn: Optional[Callable] = None,
     update_during_training: Optional[int] = None,
     monitor: Optional[Monitor] = None,
     use_jit: bool = True,
@@ -145,6 +157,11 @@ def train_using_adam_and_update(
     n = data[0].shape[0]
     dataset = transform_to_dataset(data, batch_size, shuffle=n)
     data_iter = iter(dataset)
+
+    update_during_training = update_during_training and (update_fn is not None)
+    def internal_update_fn():
+        if update_fn is not None:
+            update_fn()
 
     loss_fn = model.training_loss_closure(data_iter, compile=False)
     variables = model.trainable_variables
@@ -165,15 +182,17 @@ def train_using_adam_and_update(
         return monitor(step)
 
     iteration = 0
-    update_fn()
+    internal_update_fn()
 
     print("Run monitor")
     monitor_wrapper(iteration)
 
     for iteration in range(iterations):
         optimize_step()
-        # TODO(@awav): uncomment this if clustering should run at each iteration!
-        # update_fn()
+
+        if update_during_training is not None:
+            internal_update_fn()
+
         monitor_wrapper(iteration)
 
         if monitor is not None:
@@ -269,11 +288,14 @@ def create_monitor(
     batch_size,
     logdir: Union[str, Path] = "./logs-default/",
     use_jit: bool = True,
+    use_tensorboard: bool = True,
 ) -> Monitor:
-    monitor = Monitor(logdir)
+    monitor = Monitor(logdir, use_tensorboard=use_tensorboard)
     print_callback = make_print_callback()
     param_callback = make_param_callback(model)
-    metric_callback = make_metrics_callback(model, train_data, test_data, batch_size, use_jit=use_jit)
+    metric_callback = make_metrics_callback(
+        model, train_data, test_data, batch_size, use_jit=use_jit
+    )
     monitor.add_callback("print", print_callback)
     monitor.add_callback("params", param_callback)
     monitor.add_callback("metrics", metric_callback, record_step=5)

@@ -7,31 +7,48 @@ import numpy as np
 class Monitor:
     __initial_iteration: int = 0
 
-    def __init__(self, logdir: Union[Path, str]):
+    def __init__(self, logdir: Union[Path, str], use_tensorboard: bool = True):
         max_queue = 5
         flush_secs = 10
         self._logdir = logdir
         self._iter: int = self.__initial_iteration
-        self._writer = SummaryWriter(logdir=str(logdir), max_queue=max_queue, flush_secs=flush_secs)
+        self._writer = None
+        if use_tensorboard:
+            self._writer = SummaryWriter(
+                logdir=str(logdir), max_queue=max_queue, flush_secs=flush_secs
+            )
         self._callbacks = {}
 
     @property
-    def writer(self) -> SummaryWriter:
+    def writer(self) -> Optional[SummaryWriter]:
         return self._writer
+
+    def writer_add_scalar(
+        self,
+        name: str,
+        value,
+        global_step: Optional[int] = None,
+    ):
+        if self.writer is not None:
+            self.writer.add_scalar(name, value, global_step=global_step)
+
+    def writer_flush(self):
+        if self.writer is not None:
+            self.writer.flush()
 
     def add_callback(self, name: str, callback: Callable, record_step: Optional[int] = None):
         self._callbacks[name] = (callback, record_step, {})
 
     def reset(self):
         self._iter = self.__initial_iteration
-        self.writer.flush()
+        self.writer_flush()
         callbacks = {}
         for name, (cb, record_step, _) in self._callbacks.items():
             callbacks[name] = (cb, record_step, {})
         self._callbacks = callbacks
 
     def flush(self):
-        self.writer.flush()
+        self.writer_flush()
         logdir = self._logdir
         for k, (_, _, v) in self._callbacks.items():
             path = Path(logdir, f"{k}.logs.npy")
@@ -39,7 +56,8 @@ class Monitor:
 
     def close(self):
         self.flush()
-        self.writer.close()
+        if self.writer is not None:
+            self.writer.close()
 
     def _increment_iter(self):
         self._iter += 1
@@ -54,9 +72,9 @@ class Monitor:
         for key, res in results.items():
             if isinstance(res, (list, np.ndarray)) and _len(res) > 1:
                 for i, r in enumerate(res):
-                    self.writer.add_scalar(f"{key}_{i}", r, global_step=step)
+                    self.writer_add_scalar(f"{key}_{i}", r, global_step=step)
             else:
-                self.writer.add_scalar(key, res, global_step=step)
+                self.writer_add_scalar(key, res, global_step=step)
 
             if key in logs:
                 logs[key].append(res)

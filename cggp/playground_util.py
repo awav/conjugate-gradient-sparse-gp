@@ -21,6 +21,7 @@ def create_model(
     x, y = data
     xt = tf.convert_to_tensor(x, dtype=default_float())
     yt = tf.convert_to_tensor(y, dtype=default_float())
+    n = x.shape[0]
 
     lengthscale = [1.0]
     variance = 0.1
@@ -36,7 +37,7 @@ def create_model(
 
     iv = clustering_fn()
 
-    model = model_class(kernel, likelihood, iv)
+    model = model_class(kernel, likelihood, iv, num_data=n)
 
     gpflow.utilities.set_trainable(model.inducing_variable, False)
     return (xt, yt), model, clustering_fn, distance_fn
