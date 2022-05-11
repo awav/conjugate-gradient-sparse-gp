@@ -138,6 +138,7 @@ def train_using_adam_and_update(
     batch_size: int,
     learning_rate: float,
     update_fn: Callable,
+    update_during_training: Optional[int] = None,
     monitor: Optional[Monitor] = None,
     use_jit: bool = True,
 ):
