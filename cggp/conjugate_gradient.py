@@ -50,7 +50,7 @@ def conjugate_gradient(
     A = matrix
     v = initial_solution
     b = rhs
-    min_float = tf.convert_to_tensor(1e-10, dtype=v.dtype)
+    min_float = tf.convert_to_tensor(1e-16, dtype=v.dtype)
     zero = tf.constant(0.0, dtype=v.dtype)
 
     def stopping_condition(state):
