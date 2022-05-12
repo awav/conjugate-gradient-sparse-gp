@@ -89,12 +89,16 @@ def conjugate_gradient(
         p = z
         i = tf.convert_to_tensor(0, dtype=tf.int32)
         initial_state = CGState(i, v, r, p, rz)
-        final_state = tf.while_loop(stopping_condition, lambda state: cg_step(state, b), [initial_state])[0]
+        final_state = tf.while_loop(
+            stopping_condition, lambda state: cg_step(state, b), [initial_state]
+        )[0]
         stats_steps = final_state.i
         stats_error = 0.5 * final_state.rz
         solution = final_state.v
 
-        def grad_conjugate_gradient(dx: Tensor, d_stats_steps, d_stats_error) -> Tuple[Tensor,Tensor]:
+        def grad_conjugate_gradient(
+            dx: Tensor, d_stats_steps, d_stats_error
+        ) -> Tuple[Tensor, Tensor]:
             """
             Given sensitivity dx for Ax = b, compute db = A^{-1} dx and dA = -db dx^T
             """
@@ -105,7 +109,9 @@ def conjugate_gradient(
             grad_p = grad_z
             grad_i = tf.convert_to_tensor(0, dtype=tf.int32)
             grad_initial_state = CGState(grad_i, grad_v, grad_r, grad_p, grad_rz)
-            grad_final_state = tf.while_loop(stopping_condition, lambda state: cg_step(state, dx), [grad_initial_state])[0]
+            grad_final_state = tf.while_loop(
+                stopping_condition, lambda state: cg_step(state, dx), [grad_initial_state]
+            )[0]
             db = grad_final_state.v
             dA = -tf.transpose(solution) @ db
             return (dA, db, None)

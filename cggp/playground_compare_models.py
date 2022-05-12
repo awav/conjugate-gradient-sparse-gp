@@ -1,13 +1,15 @@
+from email.policy import default
 from kmeans import kmeans_indices_and_distances
 from models import ClusterGP, CGGP, LpSVGP
 from conjugate_gradient import ConjugateGradient
 from data import snelson1d, load_data
 import matplotlib.pyplot as plt
 import gpflow
+from gpflow.config import default_float
 import tensorflow as tf
 import numpy as np
 
-from playground_util import create_model
+from playground_util import create_model_and_update_fn
 
 from optimize import (
     kmeans_update_inducing_parameters,
@@ -29,54 +31,56 @@ if __name__ == "__main__":
 
     slice_size = 5000
     x, y = train_data
-    x = x[:slice_size]
-    y = y[:slice_size]
+    xt, yt = test_data
+    x = tf.convert_to_tensor(x[:slice_size], dtype=default_float())
+    y = tf.convert_to_tensor(y[:slice_size], dtype=default_float())
+    xt = tf.convert_to_tensor(xt[:slice_size], dtype=default_float())
+    yt = tf.convert_to_tensor(yt[:slice_size], dtype=default_float())
+
+    train_data = (x, y)
+    test_data = (xt, yt)
 
     def model_class(kernel, likelihood, iv, **kwargs):
-        error_threshold = 1e-3
+        error_threshold = 1e-6
         conjugate_gradient = ConjugateGradient(error_threshold)
         return CGGP(kernel, likelihood, iv, conjugate_gradient, **kwargs)
 
-    data, cggp, clustering_fn, distance_fn = create_model(
-        (x, y),
-        num_inducing_points,
-        distance_type,
+    cggp, cggp_update_fn = create_model_and_update_fn(
         model_class,
+        train_data,
+        num_inducing_points,
     )
 
-    _, clustergp, _, _ = create_model(
-        (x, y),
-        num_inducing_points,
-        distance_type,
+    clustergp, clustergp_update_fn = create_model_and_update_fn(
         ClusterGP,
-    )
-
-    _, lpsvgp, _, _ = create_model(
-        (x, y),
+        train_data,
         num_inducing_points,
-        distance_type,
-        LpSVGP,
     )
 
-    iv, means, lambda_diag = kmeans_update_inducing_parameters(
-        cggp, data, distance_fn, clustering_fn
+    lpsvgp, _ = create_model_and_update_fn(
+        LpSVGP,
+        train_data,
+        num_inducing_points,
     )
+
+    iv, means, cluster_counts = cggp_update_fn()
 
     lpsvgp.inducing_variable.Z.assign(iv)
 
     cggp.inducing_variable.Z.assign(iv)
-    cggp.diag_variance.assign(lambda_diag)
-    cggp.pseudo_u.assign(lambda_diag)
+    cggp.cluster_counts.assign(cluster_counts)
+    cggp.pseudo_u.assign(means)
 
     clustergp.inducing_variable.Z.assign(iv)
-    clustergp.diag_variance.assign(lambda_diag)
-    clustergp.pseudo_u.assign(lambda_diag)
+    clustergp.cluster_counts.assign(cluster_counts)
+    clustergp.pseudo_u.assign(means)
 
     num_iterations = 1000
     batch_size = 500
-    monitor_batch_size = 1000
+    monitor_batch_size = 2000
     learning_rate = 0.01
     use_jit = True
+    # use_jit = False
     use_tb = True
     logdir = "./logs-compare-playground"
 
@@ -90,13 +94,13 @@ if __name__ == "__main__":
         logdir=logdir_cggp,
     )
     train_using_adam_and_update(
-        data,
+        train_data,
         cggp,
         num_iterations,
         batch_size,
         learning_rate,
-        update_fn=None,
-        update_during_training=False,
+        update_fn=cggp_update_fn,
+        update_during_training=True,
         use_jit=use_jit,
         monitor=monitor_cggp,
     )
@@ -111,13 +115,13 @@ if __name__ == "__main__":
         logdir=logdir_clustergp,
     )
     train_using_adam_and_update(
-        data,
+        train_data,
         clustergp,
         num_iterations,
         batch_size,
         learning_rate,
-        update_fn=None,
-        update_during_training=False,
+        update_fn=clustergp_update_fn,
+        update_during_training=True,
         use_jit=use_jit,
         monitor=monitor_clustergp,
     )
@@ -132,7 +136,7 @@ if __name__ == "__main__":
         logdir=logdir_lpsvgp,
     )
     train_using_adam_and_update(
-        data,
+        train_data,
         lpsvgp,
         num_iterations,
         batch_size,

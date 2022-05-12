@@ -23,14 +23,12 @@ def covertree_update_inducing_parameters(
     covertree = ModifiedCoverTree(distance_fn, data)
     new_iv = covertree.centroids
     means, counts = covertree.cluster_mean_and_counts
-    sigma2 = model.likelihood.variance
-    lambda_diag = sigma2 / counts
 
     model.inducing_variable.Z.assign(new_iv)
     model.pseudo_u.assign(means)
-    model.diag_variance.assign(lambda_diag)
+    model.cluster_counts.assign(counts)
 
-    return new_iv, means, lambda_diag
+    return new_iv, means, counts
 
 
 def kmeans_update_inducing_parameters(
@@ -50,13 +48,12 @@ def kmeans_update_inducing_parameters(
     update_indices = tf.reshape(indices, [-1, 1])
     u = tf.tensor_scatter_nd_add(u_init, update_indices, y) / counts
     sigma2 = model.likelihood.variance
-    lambda_diag = sigma2 / counts
 
     model.inducing_variable.Z.assign(new_iv)
     model.pseudo_u.assign(u)
-    model.diag_variance.assign(lambda_diag)
+    model.cluster_counts.assign(counts)
 
-    return new_iv, u, lambda_diag
+    return new_iv, u, counts
 
 
 def train_vanilla_using_lbfgs_and_standard_ip_update(
