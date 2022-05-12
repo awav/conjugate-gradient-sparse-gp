@@ -10,12 +10,25 @@ from gpflow.config import default_float
 
 from utils import add_diagonal
 from rff import rff_sample
-from conjugate_gradient import ConjugateGradient
+from conjugate_gradient import ConjugateGradient, conjugate_gradient
 
 
 Tensor = tf.Tensor
 Moments = Tuple[Tensor, Tensor]
 
+def eval_logdet(matrix, conjugate_gradient):
+    @tf.custom_gradient
+    def _eval_logdet(matrix):
+        dtype = matrix.dtype
+        def grad_logdet(df: Tensor) -> Tensor:
+            n = tf.shape(matrix)[-1]
+            eye = tf.linalg.eye(n, dtype=dtype)
+            KmmLambdaInv = conjugate_gradient(matrix, eye)
+            KmmLambdaInv = tf.transpose(KmmLambdaInv)
+            return df * KmmLambdaInv
+
+        return tf.constant(0.0, dtype=dtype), grad_logdet
+    return _eval_logdet(matrix)
 
 class LpSVGP(gpflow.models.GPModel, gpflow.models.ExternalDataTrainingLossMixin):
     """
@@ -232,20 +245,7 @@ class CGGP(ClusterGP):
 
         quad = tf.reduce_sum(tf.matmul(Kmm, KmmLambdaInv_u, transpose_b=True) * KmmLambdaInv_u)
 
-        @tf.custom_gradient
-        def eval_logdet(matrix):
-            dtype = matrix.dtype
-
-            def grad_logdet(df: Tensor) -> Tensor:
-                n = tf.shape(matrix)[-1]
-                eye = tf.linalg.eye(n, dtype=dtype)
-                KmmLambdaInv = self.conjugate_gradient(matrix, eye)
-                KmmLambdaInv = tf.transpose(KmmLambdaInv)
-                return df * KmmLambdaInv
-
-            return tf.constant(0.0, dtype=dtype), grad_logdet
-
-        logdet = eval_logdet(KmmLambda)
+        logdet = eval_logdet(KmmLambda, conjugate_gradient)
         trace = tf.linalg.trace(KmmLambdaInv_Kmm)
         const = tf.reduce_sum(tf.math.log(var))
         return 0.5 * (quad - trace + logdet - const)
