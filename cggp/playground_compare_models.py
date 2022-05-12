@@ -1,13 +1,15 @@
+from email.policy import default
 from kmeans import kmeans_indices_and_distances
 from models import ClusterGP, CGGP, LpSVGP
 from conjugate_gradient import ConjugateGradient
 from data import snelson1d, load_data
 import matplotlib.pyplot as plt
 import gpflow
+from gpflow.config import default_float
 import tensorflow as tf
 import numpy as np
 
-from playground_util import create_model
+from playground_util import create_model_and_update_fn
 
 from optimize import (
     kmeans_update_inducing_parameters,
@@ -29,38 +31,39 @@ if __name__ == "__main__":
 
     slice_size = 5000
     x, y = train_data
-    x = x[:slice_size]
-    y = y[:slice_size]
+    xt, yt = test_data
+    x = tf.convert_to_tensor(x[:slice_size], dtype=default_float())
+    y = tf.convert_to_tensor(y[:slice_size], dtype=default_float())
+    xt = tf.convert_to_tensor(xt[:slice_size], dtype=default_float())
+    yt = tf.convert_to_tensor(yt[:slice_size], dtype=default_float())
+
+    train_data = (x, y)
+    test_data = (xt, yt)
 
     def model_class(kernel, likelihood, iv, **kwargs):
-        error_threshold = 1e-3
+        error_threshold = 1e-6
         conjugate_gradient = ConjugateGradient(error_threshold)
         return CGGP(kernel, likelihood, iv, conjugate_gradient, **kwargs)
 
-    data, cggp, clustering_fn, distance_fn = create_model(
-        (x, y),
-        num_inducing_points,
-        distance_type,
+    cggp, cggp_update_fn = create_model_and_update_fn(
         model_class,
+        train_data,
+        num_inducing_points,
     )
 
-    _, clustergp, _, _ = create_model(
-        (x, y),
-        num_inducing_points,
-        distance_type,
+    clustergp, clustergp_update_fn = create_model_and_update_fn(
         ClusterGP,
-    )
-
-    _, lpsvgp, _, _ = create_model(
-        (x, y),
+        train_data,
         num_inducing_points,
-        distance_type,
-        LpSVGP,
     )
 
-    iv, means, lambda_diag = kmeans_update_inducing_parameters(
-        cggp, data, distance_fn, clustering_fn
+    lpsvgp, _ = create_model_and_update_fn(
+        LpSVGP,
+        train_data,
+        num_inducing_points,
     )
+
+    iv, means, lambda_diag = cggp_update_fn()
 
     lpsvgp.inducing_variable.Z.assign(iv)
 
@@ -74,13 +77,13 @@ if __name__ == "__main__":
 
     num_iterations = 1000
     batch_size = 500
-    monitor_batch_size = 1000
+    monitor_batch_size = 2000
     learning_rate = 0.01
     use_jit = True
     use_tb = True
     logdir = "./logs-compare-playground"
 
-    logdir_cggp = f"{logdir}/cggp"
+    logdir_cggp = f"{logdir}/cggp-1e-6"
     monitor_cggp = create_monitor(
         cggp,
         train_data,
@@ -90,57 +93,57 @@ if __name__ == "__main__":
         logdir=logdir_cggp,
     )
     train_using_adam_and_update(
-        data,
+        train_data,
         cggp,
         num_iterations,
         batch_size,
         learning_rate,
-        update_fn=None,
-        update_during_training=False,
+        update_fn=cggp_update_fn,
+        update_during_training=True,
         use_jit=use_jit,
         monitor=monitor_cggp,
     )
 
-    logdir_clustergp = f"{logdir}/clustergp"
-    monitor_clustergp = create_monitor(
-        clustergp,
-        train_data,
-        test_data,
-        monitor_batch_size,
-        use_tensorboard=use_tb,
-        logdir=logdir_clustergp,
-    )
-    train_using_adam_and_update(
-        data,
-        clustergp,
-        num_iterations,
-        batch_size,
-        learning_rate,
-        update_fn=None,
-        update_during_training=False,
-        use_jit=use_jit,
-        monitor=monitor_clustergp,
-    )
+    # logdir_clustergp = f"{logdir}/clustergp"
+    # monitor_clustergp = create_monitor(
+    #     clustergp,
+    #     train_data,
+    #     test_data,
+    #     monitor_batch_size,
+    #     use_tensorboard=use_tb,
+    #     logdir=logdir_clustergp,
+    # )
+    # train_using_adam_and_update(
+    #     train_data,
+    #     clustergp,
+    #     num_iterations,
+    #     batch_size,
+    #     learning_rate,
+    #     update_fn=clustergp_update_fn,
+    #     update_during_training=True,
+    #     use_jit=use_jit,
+    #     monitor=monitor_clustergp,
+    # )
 
-    logdir_lpsvgp = f"{logdir}/lpsvgp"
-    monitor_lpsvgp = create_monitor(
-        lpsvgp,
-        train_data,
-        test_data,
-        monitor_batch_size,
-        use_tensorboard=use_tb,
-        logdir=logdir_lpsvgp,
-    )
-    train_using_adam_and_update(
-        data,
-        lpsvgp,
-        num_iterations,
-        batch_size,
-        learning_rate,
-        update_fn=None,
-        update_during_training=False,
-        use_jit=use_jit,
-        monitor=monitor_lpsvgp,
-    )
+    # logdir_lpsvgp = f"{logdir}/lpsvgp"
+    # monitor_lpsvgp = create_monitor(
+    #     lpsvgp,
+    #     train_data,
+    #     test_data,
+    #     monitor_batch_size,
+    #     use_tensorboard=use_tb,
+    #     logdir=logdir_lpsvgp,
+    # )
+    # train_using_adam_and_update(
+    #     train_data,
+    #     lpsvgp,
+    #     num_iterations,
+    #     batch_size,
+    #     learning_rate,
+    #     update_fn=None,
+    #     update_during_training=False,
+    #     use_jit=use_jit,
+    #     monitor=monitor_lpsvgp,
+    # )
 
     print(f"End. Check tensorboard logdir {logdir}")

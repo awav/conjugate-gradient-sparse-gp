@@ -49,7 +49,7 @@ def create_kmeans_update_fn(model, data, num_inducing_points: int, use_jit: bool
         return iv
 
     def update_fn():
-        kmeans_update_inducing_parameters(model, data, distance_fn, clustering_fn)
+        return kmeans_update_inducing_parameters(model, data, distance_fn, clustering_fn)
 
     return update_fn
 
@@ -59,7 +59,7 @@ def create_covertree_update_fn(model, data, use_jit: bool = True):
     distance_fn = jit(use_jit)(distance_fn)
 
     def update_fn():
-        covertree_update_inducing_parameters(model, data, distance_fn)
+        return covertree_update_inducing_parameters(model, data, distance_fn)
 
     return update_fn
 
