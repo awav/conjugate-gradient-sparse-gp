@@ -53,7 +53,9 @@ def test_log_determinant_grad(dimension, num_inputs, num_systems, max_error, ker
         matrix = add_diagonal(matrix, noise_variance * tf.ones(matrix.shape[0], dtype=default_float()))
         conjugate_gradient = ConjugateGradient(max_error)
         logdet = eval_logdet(matrix, conjugate_gradient)
-        logdet_grad_cg = t.gradient(logdet, kernel.trainable_variables)
+
+    logdet_grad_cg = t.gradient(logdet, kernel.trainable_variables)
+    
     for g1, g2 in zip(logdet_grad, logdet_grad_cg):
         np.testing.assert_allclose(g1, g2, rtol=1e-3, atol=1e-3)
 
