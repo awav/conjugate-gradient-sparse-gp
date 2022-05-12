@@ -28,7 +28,7 @@ def test_cg(dimension, num_inputs, num_systems, max_error, kernel_class):
         
         inv_solution = tf.linalg.solve(matrix, rhs)
         inv_sum =  tf.reduce_sum(inv_solution)
-        cg = ConjugateGradient(max_error, differentiate_while_loop=True)
+        cg = ConjugateGradient(max_error)
         cg_solution = tf.transpose(cg(matrix, tf.transpose(rhs)))
         cg_sum = tf.reduce_sum(cg_solution)
 
