@@ -29,6 +29,7 @@ def conjugate_gradient(
     preconditioner: Optional[Callable] = None,
     max_iterations: Optional[int] = None,
     max_steps_cycle: int = 100,
+    differentiate_while_loop = False,
 ):
     """
     Conjugate gradient for solving system of linear equations math:`Av = b`.
@@ -87,7 +88,10 @@ def conjugate_gradient(
     i = tf.convert_to_tensor(0, dtype=tf.int32)
     initial_state = CGState(i, v, r, p, rz)
     final_state = tf.while_loop(stopping_condition, cg_step, [initial_state])
-    final_state = tf.nest.map_structure(tf.stop_gradient, final_state)[0]
+    if differentiate_while_loop:
+        final_state = final_state[0]
+    else:
+        final_state = tf.nest.map_structure(tf.stop_gradient, final_state)[0]
     stats_steps = final_state.i
     stats_error = 0.5 * final_state.rz
     solution = final_state.v
@@ -111,6 +115,7 @@ class ConjugateGradient:
     error_threshold: Union[Tensor, float]
     max_iterations: Optional[int]
     max_steps_cycle: Optional[int]
+    differentiate_while_loop: bool
 
     def __init__(
         self,
@@ -118,6 +123,7 @@ class ConjugateGradient:
         preconditioner: Optional[CGPreconditioner] = None,
         max_iterations: Optional[int] = None,
         max_steps_cycle: Optional[int] = None,
+        differentiate_while_loop = False,
     ):
         self.error_threshold = error_threshold
         if preconditioner is None:
@@ -125,6 +131,7 @@ class ConjugateGradient:
         self.preconditioner = preconditioner
         self.max_iterations = max_iterations
         self.max_steps_cycle = max_steps_cycle
+        self.differentiate_while_loop = differentiate_while_loop
 
     def __call__(
         self, matrix: Tensor, rhs: Tensor, initial_solution: Optional[Tensor] = None
@@ -143,6 +150,8 @@ class ConjugateGradient:
         preconditioner = self.preconditioner
         error_threshold = self.error_threshold
 
+        differentiate_while_loop = self.differentiate_while_loop
+
         solution, stats = conjugate_gradient(
             matrix,
             rhs,
@@ -151,6 +160,7 @@ class ConjugateGradient:
             preconditioner=preconditioner,
             max_iterations=max_iterations,
             max_steps_cycle=max_steps_cycle,
+            differentiate_while_loop=differentiate_while_loop,
         )
 
         return solution
