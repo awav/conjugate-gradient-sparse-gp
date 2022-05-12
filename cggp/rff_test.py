@@ -69,4 +69,4 @@ def test_rff_sample(dimension, num_inputs, num_bases, num_samples, kernel_class)
 
 
 if __name__ == "__main__":
-    pytest.main()
+    pytest.main(args = [__file__])

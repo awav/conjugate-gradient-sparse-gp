@@ -47,51 +47,72 @@ def conjugate_gradient(
     if max_iterations is None:
         max_iterations = tf.shape(matrix)[0]
 
-    A = matrix
-    v = initial_solution
-    b = rhs
-    min_float = tf.convert_to_tensor(1e-16, dtype=v.dtype)
-    zero = tf.constant(0.0, dtype=v.dtype)
+    min_float = tf.convert_to_tensor(1e-16, dtype=initial_solution.dtype)
+    zero = tf.constant(0.0, dtype=initial_solution.dtype)
 
-    def stopping_condition(state):
-        over_threshold = tf.reduce_any(0.5 * state.rz > error_threshold)
-        return tf.logical_and(over_threshold, (state.i < max_iterations))
+    @tf.custom_gradient
+    def _conjugate_gradient(A, b, v):
+        """
+        Solve x = A^{-1} b, where v is the initial solution
+        """
 
-    def cg_step(state):
-        pA = state.p @ A
-        denom = tf.reduce_sum(state.p * pA, axis=-1, keepdims=True)
-        gamma = state.rz / denom
-        gamma = tf.where(denom <= min_float, zero, gamma)
-        v = state.v + gamma * state.p
-        i = state.i + 1
-        reset = state.i % max_steps_cycle == max_steps_cycle - 1
-        r = tf.cond(
-            reset,
-            lambda: b - v @ A,
-            lambda: state.r - gamma * pA,
-        )
-        z, new_rz = preconditioner(r)
-        z_update = state.p * new_rz / state.rz
-        z_update = tf.where(state.rz <= min_float, zero, z_update)
-        p = tf.cond(
-            reset,
-            lambda: z,
-            lambda: z + z_update,
-        )
-        return [CGState(i, v, r, p, new_rz)]
+        def stopping_condition(state):
+            over_threshold = tf.reduce_any(0.5 * state.rz > error_threshold)
+            return tf.logical_and(over_threshold, (state.i < max_iterations))
 
-    vA = v @ A
-    r = b - vA
-    z, rz = preconditioner(r)
-    p = z
-    i = tf.convert_to_tensor(0, dtype=tf.int32)
-    initial_state = CGState(i, v, r, p, rz)
-    final_state = tf.while_loop(stopping_condition, cg_step, [initial_state])
-    final_state = tf.nest.map_structure(tf.stop_gradient, final_state)[0]
-    stats_steps = final_state.i
-    stats_error = 0.5 * final_state.rz
-    solution = final_state.v
-    return solution, (stats_steps, stats_error)
+        def cg_step(state, b):
+            pA = state.p @ A
+            denom = tf.reduce_sum(state.p * pA, axis=-1, keepdims=True)
+            gamma = state.rz / denom
+            gamma = tf.where(denom <= min_float, zero, gamma)
+            v = state.v + gamma * state.p
+            i = state.i + 1
+            reset = state.i % max_steps_cycle == max_steps_cycle - 1
+            r = tf.cond(
+                reset,
+                lambda: b - v @ A,
+                lambda: state.r - gamma * pA,
+            )
+            z, new_rz = preconditioner(r)
+            z_update = state.p * new_rz / state.rz
+            z_update = tf.where(state.rz <= min_float, zero, z_update)
+            p = tf.cond(
+                reset,
+                lambda: z,
+                lambda: z + z_update,
+            )
+            return [CGState(i, v, r, p, new_rz)]
+
+        vA = v @ A
+        r = b - vA
+        z, rz = preconditioner(r)
+        p = z
+        i = tf.convert_to_tensor(0, dtype=tf.int32)
+        initial_state = CGState(i, v, r, p, rz)
+        final_state = tf.while_loop(stopping_condition, lambda state: cg_step(state, b), [initial_state])[0]
+        stats_steps = final_state.i
+        stats_error = 0.5 * final_state.rz
+        solution = final_state.v
+
+        def grad_conjugate_gradient(dx: Tensor, d_stats_steps, d_stats_error) -> Tuple[Tensor,Tensor]:
+            """
+            Given sensitivity dx for Ax = b, compute db = A^{-1} dx and dA = -db dx^T
+            """
+            grad_v = tf.zeros_like(dx)
+            grad_vA = grad_v @ A
+            grad_r = dx - grad_vA
+            grad_z, grad_rz = preconditioner(grad_r)
+            grad_p = grad_z
+            grad_i = tf.convert_to_tensor(0, dtype=tf.int32)
+            grad_initial_state = CGState(grad_i, grad_v, grad_r, grad_p, grad_rz)
+            grad_final_state = tf.while_loop(stopping_condition, lambda state: cg_step(state, dx), [grad_initial_state])[0]
+            db = grad_final_state.v
+            dA = -tf.transpose(solution) @ db
+            return (dA, db, None)
+
+        return (solution, (stats_steps, stats_error)), grad_conjugate_gradient
+
+    return _conjugate_gradient(matrix, rhs, initial_solution)
 
 
 class CGPreconditioner:
