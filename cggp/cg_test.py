@@ -44,7 +44,8 @@ def test_log_determinant_grad(dimension, num_inputs, num_systems, max_error, ker
         matrix = kernel(inputs)
         matrix = add_diagonal(matrix, noise_variance * tf.ones(matrix.shape[0], dtype=default_float()))
         logdet = tf.linalg.logdet(matrix)
-        logdet_grad = t.gradient(logdet, kernel.trainable_variables)
+
+    logdet_grad = t.gradient(logdet, kernel.trainable_variables)
 
     # compute gradient via CG
     with tf.GradientTape() as t:
