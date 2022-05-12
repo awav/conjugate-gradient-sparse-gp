@@ -1,4 +1,5 @@
 from typing import Tuple
+from xml.sax.handler import property_declaration_handler
 import numpy as np
 import tensorflow as tf
 import gpflow
@@ -72,8 +73,16 @@ class LpSVGP(gpflow.models.GPModel, gpflow.models.ExternalDataTrainingLossMixin)
         nu = np.zeros((m, num_latent_gps)) if nu is None else nu
         var = np.ones((m, num_latent_gps)) * 1e-4 if diag_variance is None else diag_variance
 
-        self.nu = Parameter(nu, dtype=default_float())
-        self.diag_variance = Parameter(var, dtype=default_float(), transform=positive())
+        self._nu = Parameter(nu, dtype=default_float())
+        self._diag_variance = Parameter(var, dtype=default_float(), transform=positive())
+
+    @property
+    def nu(self):
+        return self._nu
+
+    @property
+    def diag_variance(self):
+        return self._diag_variance
 
     def prior_kl(self) -> Tensor:
         kernel = self.kernel
@@ -153,7 +162,7 @@ class ClusterGP(LpSVGP):
         *,
         mean_function=None,
         num_latent_gps: int = 1,
-        diag_variance=None,
+        cluster_counts=None,
         num_data=None,
         pseudo_u=None,
     ):
@@ -163,19 +172,32 @@ class ClusterGP(LpSVGP):
             likelihood,
             inducing_variable=inducing_variable,
             num_latent_gps=num_latent_gps,
-            diag_variance=diag_variance,
             mean_function=mean_function,
             num_data=num_data,
         )
-        self.pseudo_u = self.nu  # Copy ν parameter into another name
-        del self.nu
+        self.pseudo_u = self._nu  # Copy ν parameter into another name
+
+        del self._nu
+        del self._diag_variance
+
+        counts = tf.ones_like(self.pseudo_u)
+        self.cluster_counts = tf.Variable(counts, dtype=self.pseudo_u.dtype, trainable=False)
+        if cluster_counts is not None:
+            self.cluster_counts.assign(cluster_counts)
 
         if pseudo_u is not None:
             self.pseudo_u.assign(pseudo_u)
 
         gpflow.utilities.set_trainable(self.inducing_variable, False)
         gpflow.utilities.set_trainable(self.pseudo_u, False)
-        gpflow.utilities.set_trainable(self.diag_variance, False)
+
+    @property
+    def nu(self):
+        raise NotImplementedError(f"This property is not supported in {self.__class__}")
+
+    @property
+    def diag_variance(self) -> Tensor:
+        return self.likelihood.variance / self.cluster_counts
 
     def prior_kl(self) -> Tensor:
         kernel = self.kernel

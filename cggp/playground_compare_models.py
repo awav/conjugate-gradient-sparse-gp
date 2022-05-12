@@ -63,17 +63,17 @@ if __name__ == "__main__":
         num_inducing_points,
     )
 
-    iv, means, lambda_diag = cggp_update_fn()
+    iv, means, cluster_counts = cggp_update_fn()
 
     lpsvgp.inducing_variable.Z.assign(iv)
 
     cggp.inducing_variable.Z.assign(iv)
-    cggp.diag_variance.assign(lambda_diag)
-    cggp.pseudo_u.assign(lambda_diag)
+    cggp.cluster_counts.assign(cluster_counts)
+    cggp.pseudo_u.assign(means)
 
     clustergp.inducing_variable.Z.assign(iv)
-    clustergp.diag_variance.assign(lambda_diag)
-    clustergp.pseudo_u.assign(lambda_diag)
+    clustergp.cluster_counts.assign(cluster_counts)
+    clustergp.pseudo_u.assign(means)
 
     num_iterations = 1000
     batch_size = 500
