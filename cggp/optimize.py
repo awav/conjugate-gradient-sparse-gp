@@ -1,17 +1,41 @@
-from typing import Callable, Optional
+from pathlib import Path
+from typing import Callable, Optional, Union, Tuple
 import numpy as np
 import tensorflow as tf
 import gpflow
 from gpflow.utilities import parameter_dict
+import tensorflow as tf
 from kmeans import kmeans_indices_and_distances
-from models import ClusterGP
+from covertree import ModifiedCoverTree
+from models import ClusterGP, LpSVGP
 from utils import jit
 from monitor import Monitor
 
 
+Tensor = tf.Tensor
+
+
+def covertree_update_inducing_parameters(
+    model,
+    data,
+    distance_fn,
+) -> Tuple[Tensor, Tensor, Tensor]:
+    covertree = ModifiedCoverTree(distance_fn, data)
+    new_iv = covertree.centroids
+    means, counts = covertree.cluster_mean_and_counts
+    sigma2 = model.likelihood.variance
+    lambda_diag = sigma2 / counts
+
+    model.inducing_variable.Z.assign(new_iv)
+    model.pseudo_u.assign(means)
+    model.diag_variance.assign(lambda_diag)
+
+    return new_iv, means, lambda_diag
+
+
 def kmeans_update_inducing_parameters(
     model, data, distance_fn: Optional[Callable], clustering_fn: Callable
-) -> None:
+) -> Tuple[Tensor, Tensor, Tensor]:
     x, y = data
     new_iv = clustering_fn()
 
@@ -31,6 +55,8 @@ def kmeans_update_inducing_parameters(
     model.inducing_variable.Z.assign(new_iv)
     model.pseudo_u.assign(u)
     model.diag_variance.assign(lambda_diag)
+
+    return new_iv, u, lambda_diag
 
 
 def train_vanilla_using_lbfgs_and_standard_ip_update(
@@ -119,17 +145,23 @@ def train_using_lbfgs_and_update(
 
 def train_using_adam_and_update(
     data,
-    model: ClusterGP,
+    model: LpSVGP,
     iterations: int,
     batch_size: int,
     learning_rate: float,
-    update_fn: Callable,
+    update_fn: Optional[Callable] = None,
+    update_during_training: Optional[int] = None,
     monitor: Optional[Monitor] = None,
     use_jit: bool = True,
 ):
     n = data[0].shape[0]
     dataset = transform_to_dataset(data, batch_size, shuffle=n)
     data_iter = iter(dataset)
+
+    update_during_training = update_during_training and (update_fn is not None)
+    def internal_update_fn():
+        if update_fn is not None:
+            update_fn()
 
     loss_fn = model.training_loss_closure(data_iter, compile=False)
     variables = model.trainable_variables
@@ -150,20 +182,21 @@ def train_using_adam_and_update(
         return monitor(step)
 
     iteration = 0
-    update_fn()
+    internal_update_fn()
 
     print("Run monitor")
     monitor_wrapper(iteration)
 
     for iteration in range(iterations):
         optimize_step()
-        update_fn()
+
+        if update_during_training is not None:
+            internal_update_fn()
+
         monitor_wrapper(iteration)
 
-    if monitor is not None:
-        monitor.flush()
-
-    return
+        if monitor is not None:
+            monitor.flush()
 
 
 def make_print_callback():
@@ -172,7 +205,7 @@ def make_print_callback():
     def print_callback(step: int, *args, **kwargs):
         click.echo(f"Step: {step}")
         return {}
-    
+
     return print_callback
 
 
@@ -180,6 +213,7 @@ def make_param_callback(model):
     """
     Callback for tracking parameters in TensorBoard
     """
+
     def _callback(*args, **kwargs):
         ks = {
             f"kernel/{k.strip('.')}": v.numpy() for (k, v) in parameter_dict(model.kernel).items()
@@ -193,35 +227,43 @@ def make_param_callback(model):
     return _callback
 
 
-def make_metrics_callback(model, data, batch_size: int, use_jit: bool = True):
+def make_metrics_callback(model, train_data, test_data, batch_size: int, use_jit: bool = True):
     """
     Callback for computing test metrics (RMSE and NLPD)
     """
-    dataset = transform_to_dataset(data, batch_size, repeat=False)
+    test_dataset = transform_to_dataset(test_data, batch_size, repeat=False)
+    train_dataset = transform_to_dataset(train_data, batch_size, repeat=False)
 
     @jit(use_jit)
-    def metrics_fn(batch):
-        x, y = batch
-        elbo = model.elbo(batch)
+    def test_metrics_fn(data):
+        x, y = data
         mu, var = model.predict_f(x)
         lpd = model.likelihood.predict_log_density(mu, var, y)
         lpd = tf.reduce_sum(lpd)
         error = y - mu
-        return elbo, error, lpd
+        return error, lpd
+
+    @jit(use_jit)
+    def train_metrics_fn(data):
+        return model.elbo(data)
 
     def step_callback(step, *args, **kwargs):
         error = np.array([]).reshape(-1, 1)
         lpd = 0.0
         elbo = 0.0
-        for batch in dataset:
-            batch_elbo, batch_error, batch_log_density = metrics_fn(batch)
-            elbo += batch_elbo.numpy()
+
+        for batch in test_dataset:
+            batch_error, batch_log_density = test_metrics_fn(batch)
             lpd += batch_log_density.numpy()
             error = np.concatenate([error, batch_error.numpy()], axis=0)
 
+        for batch in train_dataset:
+            batch_elbo = train_metrics_fn(batch)
+            elbo += batch_elbo.numpy()
+
         rmse = np.sqrt(np.mean(error**2))
         nlpd = -lpd
-        return {"test/rmse": rmse, "test/nlpd": nlpd}
+        return {"train/elbo": elbo, "test/rmse": rmse, "test/nlpd": nlpd}
 
     return step_callback
 
@@ -239,11 +281,21 @@ def transform_to_dataset(
     return data
 
 
-def create_monitor(model, data, batch_size, use_jit: bool = True) -> Monitor:
-    monitor = Monitor("./default_logdir")
+def create_monitor(
+    model,
+    train_data,
+    test_data,
+    batch_size,
+    logdir: Union[str, Path] = "./logs-default/",
+    use_jit: bool = True,
+    use_tensorboard: bool = True,
+) -> Monitor:
+    monitor = Monitor(logdir, use_tensorboard=use_tensorboard)
     print_callback = make_print_callback()
     param_callback = make_param_callback(model)
-    metric_callback = make_metrics_callback(model, data, batch_size, use_jit=use_jit)
+    metric_callback = make_metrics_callback(
+        model, train_data, test_data, batch_size, use_jit=use_jit
+    )
     monitor.add_callback("print", print_callback)
     monitor.add_callback("params", param_callback)
     monitor.add_callback("metrics", metric_callback, record_step=5)

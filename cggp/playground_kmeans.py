@@ -3,7 +3,8 @@ from functools import partial
 from gpflow.kernels import SquaredExponential
 import tensorflow as tf
 
-from kmeans import create_kernel_distance_fn, kmeans_lloyd, kmeans_indices_and_distances
+from kmeans import kmeans_lloyd, kmeans_indices_and_distances
+from distance import create_kernel_distance_fn
 
 
 if __name__ == "__main__":

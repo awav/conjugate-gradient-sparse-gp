@@ -10,12 +10,25 @@ from gpflow.config import default_float
 
 from utils import add_diagonal
 from rff import rff_sample
-from conjugate_gradient import ConjugateGradient
+from conjugate_gradient import ConjugateGradient, conjugate_gradient
 
 
 Tensor = tf.Tensor
 Moments = Tuple[Tensor, Tensor]
 
+def eval_logdet(matrix, conjugate_gradient):
+    @tf.custom_gradient
+    def _eval_logdet(matrix):
+        dtype = matrix.dtype
+        def grad_logdet(df: Tensor) -> Tensor:
+            n = tf.shape(matrix)[-1]
+            eye = tf.linalg.eye(n, dtype=dtype)
+            KmmLambdaInv = conjugate_gradient(matrix, eye)
+            KmmLambdaInv = tf.transpose(KmmLambdaInv)
+            return df * KmmLambdaInv
+
+        return tf.constant(0.0, dtype=dtype), grad_logdet
+    return _eval_logdet(matrix)
 
 class LpSVGP(gpflow.models.GPModel, gpflow.models.ExternalDataTrainingLossMixin):
     """
@@ -80,11 +93,11 @@ class LpSVGP(gpflow.models.GPModel, gpflow.models.ExternalDataTrainingLossMixin)
         """
         This gives a variational bound on the model likelihood.
         """
-        X, Y = data
+        x, y = data
         kl = self.prior_kl()
-        f_mean, f_var = self.predict_f(X, full_cov=False, full_output_cov=False)
-        var_exp = self.likelihood.variational_expectations(f_mean, f_var, Y)
-        scale = self.scale(X.shape[0], kl.dtype)
+        f_mean, f_var = self.predict_f(x, full_cov=False, full_output_cov=False)
+        var_exp = self.likelihood.variational_expectations(f_mean, f_var, y)
+        scale = self.scale(tf.shape(x)[0], kl.dtype)
         return tf.reduce_sum(var_exp) * scale - kl
 
     def predict_f(self, Xnew, full_cov: bool = False, full_output_cov: bool = False) -> Moments:
@@ -102,7 +115,7 @@ class LpSVGP(gpflow.models.GPModel, gpflow.models.ExternalDataTrainingLossMixin)
         L = tf.linalg.cholesky(K)
         A = tf.linalg.triangular_solve(L, Kmn)
 
-        if full_cov:
+        if not full_cov:
             fvar = (Knn - tf.reduce_sum(tf.square(A), axis=0))[:, None]
         else:
             fvar = Knn - tf.matmul(A, A, transpose_a=True)
@@ -114,10 +127,10 @@ class LpSVGP(gpflow.models.GPModel, gpflow.models.ExternalDataTrainingLossMixin)
         predict_var = fvar
         return predict_mu, predict_var
 
-    def scale(self, batchsize, dtype):
+    def scale(self, batch_size, dtype):
         if self.num_data is not None:
             num_data = tf.convert_to_tensor(self.num_data, dtype=dtype)
-            return num_data / tf.cast(batchsize, dtype)
+            return num_data / tf.cast(batch_size, dtype)
 
         scale = tf.cast(1.0, dtype)
         return scale
@@ -222,7 +235,8 @@ class CGGP(ClusterGP):
         pseudo_u = self.pseudo_u
         var = self.diag_variance
 
-        Kmm = gpflow.covariances.Kuu(iv, kernel, jitter=0.0)
+        zero = tf.convert_to_tensor(0.0, dtype=pseudo_u.dtype)
+        Kmm = gpflow.covariances.Kuu(iv, kernel, jitter=zero)
         KmmLambda = add_diagonal(Kmm, var[:, 0])
 
         pseudo_u_t = tf.transpose(pseudo_u)
@@ -231,20 +245,7 @@ class CGGP(ClusterGP):
 
         quad = tf.reduce_sum(tf.matmul(Kmm, KmmLambdaInv_u, transpose_b=True) * KmmLambdaInv_u)
 
-        @tf.custom_gradient
-        def eval_logdet(matrix):
-            dtype = matrix.dtype
-
-            def grad_logdet(df: Tensor) -> Tensor:
-                n = tf.shape(matrix)[-1]
-                eye = tf.linalg.eye(n, dtype=dtype)
-                KmmLambdaInv = self.conjugate_gradient(matrix, eye)
-                KmmLambdaInv = tf.transpose(KmmLambdaInv)
-                return df * KmmLambdaInv
-
-            return tf.constant(0.0, dtype=dtype), grad_logdet
-
-        logdet = eval_logdet(KmmLambda)
+        logdet = eval_logdet(KmmLambda, conjugate_gradient)
         trace = tf.linalg.trace(KmmLambdaInv_Kmm)
         const = tf.reduce_sum(tf.math.log(var))
         return 0.5 * (quad - trace + logdet - const)
@@ -254,15 +255,16 @@ class CGGP(ClusterGP):
 
         iv = self.inducing_variable
         kernel = self.kernel
-        Kmm = gpflow.covariances.Kuu(iv, kernel, jitter=0.0)  # M x M
+        pseudo_u = self.pseudo_u
+        pseudo_u_t = tf.transpose(pseudo_u)
+        var = self.diag_variance
+
+        zero = tf.convert_to_tensor(0.0, dtype=pseudo_u.dtype)
+        Kmm = gpflow.covariances.Kuu(iv, kernel, jitter=zero)  # M x M
         Kmn = gpflow.covariances.Kuf(iv, kernel, Xnew)  # M x N
         Knn = kernel.K(Xnew) if full_cov else kernel.K_diag(Xnew)
 
         Knm = tf.transpose(Kmn)
-
-        pseudo_u = self.pseudo_u
-        pseudo_u_t = tf.transpose(pseudo_u)
-        var = self.diag_variance
         KmmLambda = add_diagonal(Kmm, var[:, 0])
 
         KmmLambdaInv_u = self.conjugate_gradient(KmmLambda, pseudo_u_t)

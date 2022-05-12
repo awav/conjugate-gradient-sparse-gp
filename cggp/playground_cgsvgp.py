@@ -64,26 +64,26 @@ if __name__ == "__main__":
     num_iterations = 100
     batch_size = 25
     learning_rate = 0.01
-    use_jit = True
+    use_jit = False
 
-    # opt_result = train_using_adam_and_update(
-    #     data,
-    #     experimental_model,
-    #     num_iterations,
-    #     batch_size,
-    #     learning_rate,
-    #     update_fn,
-    #     use_jit=use_jit,
-    # )
-
-    opt_result = train_using_lbfgs_and_update(
+    opt_result = train_using_adam_and_update(
         data,
         experimental_model,
-        clustering_fn,
         num_iterations,
-        distance_fn=distance_fn,
+        batch_size,
+        learning_rate,
+        update_fn,
         use_jit=use_jit,
     )
+
+    # opt_result = train_using_lbfgs_and_update(
+    #     data,
+    #     experimental_model,
+    #     clustering_fn,
+    #     num_iterations,
+    #     distance_fn=distance_fn,
+    #     use_jit=use_jit,
+    # )
 
     print("Optimization results: ")
     print(opt_result)

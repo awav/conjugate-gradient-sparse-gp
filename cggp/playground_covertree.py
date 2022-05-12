@@ -1,5 +1,6 @@
 import numpy as np
-from covertree import ModifiedCoverTree, euclid_distance
+from covertree import ModifiedCoverTree
+from distance import euclid_distance
 import matplotlib.pyplot as plt
 
 if __name__ == "__main__":
@@ -19,7 +20,7 @@ if __name__ == "__main__":
             ax.add_patch(circle)
             ax.set_xlim([-0.125, 1.125])
             ax.set_ylim([-0.125, 1.125])
-            ax.set_title(f"$R_{level} = {radius}$".format(level = level, radius = node.radius))
+            ax.set_title(f"$R_{level} = {radius}$".format(level=level, radius=node.radius))
 
     plt.savefig("covertree.pdf")
     plt.show()
