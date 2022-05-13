@@ -29,6 +29,15 @@ if __name__ == "__main__":
     num_inducing_points = 500
     num_iterations = 1000
 
+    batch_size = 500
+    monitor_batch_size = 2000
+    learning_rate = 0.01
+    use_jit = True
+    # use_jit = False
+    use_tb = True
+    logdir = "./logs-compare-playground"
+    update_during_training = True
+
     slice_size = 5000
     x, y = train_data
     xt, yt = test_data
@@ -75,16 +84,7 @@ if __name__ == "__main__":
     clustergp.cluster_counts.assign(cluster_counts)
     clustergp.pseudo_u.assign(means)
 
-    num_iterations = 1000
-    batch_size = 500
-    monitor_batch_size = 2000
-    learning_rate = 0.01
-    use_jit = True
-    # use_jit = False
-    use_tb = True
-    logdir = "./logs-compare-playground"
-
-    logdir_cggp = f"{logdir}/cggp"
+    logdir_cggp = f"{logdir}/cggp-repeat"
     monitor_cggp = create_monitor(
         cggp,
         train_data,
@@ -100,51 +100,51 @@ if __name__ == "__main__":
         batch_size,
         learning_rate,
         update_fn=cggp_update_fn,
-        update_during_training=True,
+        update_during_training=update_during_training,
         use_jit=use_jit,
         monitor=monitor_cggp,
     )
 
-    # logdir_clustergp = f"{logdir}/clustergp"
-    # monitor_clustergp = create_monitor(
-    #     clustergp,
-    #     train_data,
-    #     test_data,
-    #     monitor_batch_size,
-    #     use_tensorboard=use_tb,
-    #     logdir=logdir_clustergp,
-    # )
-    # train_using_adam_and_update(
-    #     train_data,
-    #     clustergp,
-    #     num_iterations,
-    #     batch_size,
-    #     learning_rate,
-    #     update_fn=clustergp_update_fn,
-    #     update_during_training=True,
-    #     use_jit=use_jit,
-    #     monitor=monitor_clustergp,
-    # )
+    logdir_clustergp = f"{logdir}/clustergp"
+    monitor_clustergp = create_monitor(
+        clustergp,
+        train_data,
+        test_data,
+        monitor_batch_size,
+        use_tensorboard=use_tb,
+        logdir=logdir_clustergp,
+    )
+    train_using_adam_and_update(
+        train_data,
+        clustergp,
+        num_iterations,
+        batch_size,
+        learning_rate,
+        update_fn=clustergp_update_fn,
+        update_during_training=update_during_training,
+        use_jit=use_jit,
+        monitor=monitor_clustergp,
+    )
 
-    # logdir_lpsvgp = f"{logdir}/lpsvgp"
-    # monitor_lpsvgp = create_monitor(
-    #     lpsvgp,
-    #     train_data,
-    #     test_data,
-    #     monitor_batch_size,
-    #     use_tensorboard=use_tb,
-    #     logdir=logdir_lpsvgp,
-    # )
-    # train_using_adam_and_update(
-    #     train_data,
-    #     lpsvgp,
-    #     num_iterations,
-    #     batch_size,
-    #     learning_rate,
-    #     update_fn=None,
-    #     update_during_training=False,
-    #     use_jit=use_jit,
-    #     monitor=monitor_lpsvgp,
-    # )
+    logdir_lpsvgp = f"{logdir}/lpsvgp"
+    monitor_lpsvgp = create_monitor(
+        lpsvgp,
+        train_data,
+        test_data,
+        monitor_batch_size,
+        use_tensorboard=use_tb,
+        logdir=logdir_lpsvgp,
+    )
+    train_using_adam_and_update(
+        train_data,
+        lpsvgp,
+        num_iterations,
+        batch_size,
+        learning_rate,
+        update_fn=None,
+        update_during_training=update_during_training,
+        use_jit=use_jit,
+        monitor=monitor_lpsvgp,
+    )
 
     print(f"End. Check tensorboard logdir {logdir}")
