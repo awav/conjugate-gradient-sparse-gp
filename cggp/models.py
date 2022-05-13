@@ -265,11 +265,11 @@ class CGGP(ClusterGP):
         Kmm = gpflow.covariances.Kuu(iv, kernel, jitter=zero)
         KmmLambda = add_diagonal(Kmm, var[:, 0])
 
-        pseudo_u_t = tf.transpose(pseudo_u)
-        KmmLambdaInv_u = self.conjugate_gradient(KmmLambda, pseudo_u_t)
+        KmmLambdaInv_u = self.conjugate_gradient(KmmLambda, pseudo_u)
         KmmLambdaInv_Kmm = self.conjugate_gradient(KmmLambda, Kmm)
 
-        quad = tf.reduce_sum(tf.matmul(Kmm, KmmLambdaInv_u, transpose_b=True) * KmmLambdaInv_u)
+        quad_Kmm_KmmLambdaInv_u = tf.matmul(Kmm, KmmLambdaInv_u) * KmmLambdaInv_u
+        quad = tf.reduce_sum(quad_Kmm_KmmLambdaInv_u)
 
         logdet = eval_logdet(KmmLambda, self.conjugate_gradient)
         trace = tf.linalg.trace(KmmLambdaInv_Kmm)
@@ -282,7 +282,6 @@ class CGGP(ClusterGP):
         iv = self.inducing_variable
         kernel = self.kernel
         pseudo_u = self.pseudo_u
-        pseudo_u_t = tf.transpose(pseudo_u)
         var = self.diag_variance
 
         zero = tf.convert_to_tensor(0.0, dtype=pseudo_u.dtype)
@@ -290,12 +289,11 @@ class CGGP(ClusterGP):
         Kmn = gpflow.covariances.Kuf(iv, kernel, Xnew)  # M x N
         Knn = kernel.K(Xnew) if full_cov else kernel.K_diag(Xnew)
 
-        Knm = tf.transpose(Kmn)
         KmmLambda = add_diagonal(Kmm, var[:, 0])
 
-        KmmLambdaInv_u = self.conjugate_gradient(KmmLambda, pseudo_u_t)
-        KmmLambdaInv_Kmn = self.conjugate_gradient(KmmLambda, Knm)
-        Knm_KmmLambdaInv_Kmn = tf.matmul(Knm, KmmLambdaInv_Kmn, transpose_b=True)
+        KmmLambdaInv_u = self.conjugate_gradient(KmmLambda, pseudo_u)
+        KmmLambdaInv_Kmn = self.conjugate_gradient(KmmLambda, Kmn)
+        Knm_KmmLambdaInv_Kmn = tf.matmul(Kmn, KmmLambdaInv_Kmn, transpose_a=True)
 
         if not full_cov:
             fvar = Knn - tf.linalg.diag_part(Knm_KmmLambdaInv_Kmn)
@@ -304,7 +302,7 @@ class CGGP(ClusterGP):
             fvar = Knn - Knm_KmmLambdaInv_Kmn
             fvar = fvar[None, ...]
 
-        fmu = tf.matmul(Knm, KmmLambdaInv_u, transpose_b=True)
+        fmu = tf.matmul(Kmn, KmmLambdaInv_u, transpose_a=True)
         predict_mu = fmu + self.mean_function(Xnew)
         predict_var = fvar
         return predict_mu, predict_var
