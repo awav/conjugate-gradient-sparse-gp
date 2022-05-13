@@ -19,8 +19,9 @@ def covertree_update_inducing_parameters(
     model,
     data,
     distance_fn,
+    max_radius: float,
 ) -> Tuple[Tensor, Tensor, Tensor]:
-    covertree = ModifiedCoverTree(distance_fn, data)
+    covertree = ModifiedCoverTree(distance_fn, data, max_radius=max_radius)
     new_iv = covertree.centroids
     means, counts = covertree.cluster_mean_and_counts
 
@@ -156,6 +157,7 @@ def train_using_adam_and_update(
     data_iter = iter(dataset)
 
     update_during_training = update_during_training and (update_fn is not None)
+
     def internal_update_fn():
         if update_fn is not None:
             update_fn()

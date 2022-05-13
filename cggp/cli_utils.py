@@ -1,4 +1,4 @@
-from typing import Literal, Callable
+from typing import Literal, Callable, Optional
 
 import gpflow
 import numpy as np
@@ -18,15 +18,21 @@ def create_model(
     model_fn: Callable,
     kernel_fn: Callable,
     data,
-    num_inducing_points: int,
+    num_inducing_points: Optional[int] = None,
 ):
     x = np.array(data[0])
     n = x.shape[0]
     dim = x.shape[-1]
     default_variance = 0.1
+    dtype = x.dtype
 
-    rand_indices = np.random.choice(n, size=num_inducing_points, replace=False)
-    iv = tf.convert_to_tensor(x[rand_indices, ...], dtype=default_float())
+    if num_inducing_points is not None:
+        rand_indices = np.random.choice(n, size=num_inducing_points, replace=False)
+        iv = tf.convert_to_tensor(x[rand_indices, ...], dtype=dtype)
+    else:
+        rand_num_inducing_points = int(n * 0.1)
+        rand_indices = np.random.choice(n, size=rand_num_inducing_points, replace=False)
+        iv = tf.Variable(x[rand_indices, ...], dtype=dtype)
 
     likelihood = gpflow.likelihoods.Gaussian(variance=default_variance)
     kernel = kernel_fn(dim)
@@ -35,7 +41,12 @@ def create_model(
     return model
 
 
-def create_kmeans_update_fn(model, data, num_inducing_points: int, use_jit: bool = True):
+def create_kmeans_update_fn(
+    model,
+    data,
+    use_jit: bool = True,
+    num_inducing_points: int = 1,
+):
     x, _ = data
     distance_fn = create_kernel_distance_fn(model.kernel, "covariance")
     distance_fn = jit(use_jit)(distance_fn)
@@ -54,12 +65,12 @@ def create_kmeans_update_fn(model, data, num_inducing_points: int, use_jit: bool
     return update_fn
 
 
-def create_covertree_update_fn(model, data, use_jit: bool = True):
+def create_covertree_update_fn(model, data, use_jit: bool = True, max_radius: float = 1.0):
     distance_fn = create_kernel_distance_fn(model.kernel, "covariance")
     distance_fn = jit(use_jit)(distance_fn)
 
     def update_fn():
-        return covertree_update_inducing_parameters(model, data, distance_fn)
+        return covertree_update_inducing_parameters(model, data, distance_fn, max_radius)
 
     return update_fn
 
@@ -68,11 +79,11 @@ def create_update_fn(
     clustering_type: ClusteringType,
     model,
     data,
-    num_inducing_points,
     use_jit: bool = True,
+    **clustering_kwargs,
 ):
     if clustering_type == "kmeans":
-        return create_kmeans_update_fn(model, data, num_inducing_points, use_jit=use_jit)
+        return create_kmeans_update_fn(model, data, use_jit=use_jit, **clustering_kwargs)
     elif clustering_type == "covertree":
-        return create_covertree_update_fn(model, data, use_jit=use_jit)
+        return create_covertree_update_fn(model, data, use_jit=use_jit, **clustering_kwargs)
     raise ValueError(f"Unknown value for {clustering_type}")

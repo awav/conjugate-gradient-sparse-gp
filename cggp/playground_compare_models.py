@@ -9,7 +9,7 @@ from gpflow.config import default_float
 import tensorflow as tf
 import numpy as np
 
-from playground_util import create_model_and_update_fn
+from playground_util import create_model_and_kmeans_update_fn
 
 from optimize import (
     kmeans_update_inducing_parameters,
@@ -54,19 +54,19 @@ if __name__ == "__main__":
         conjugate_gradient = ConjugateGradient(error_threshold)
         return CGGP(kernel, likelihood, iv, conjugate_gradient, **kwargs)
 
-    cggp, cggp_update_fn = create_model_and_update_fn(
+    cggp, cggp_update_fn = create_model_and_kmeans_update_fn(
         model_class,
         train_data,
         num_inducing_points,
     )
 
-    clustergp, clustergp_update_fn = create_model_and_update_fn(
+    clustergp, clustergp_update_fn = create_model_and_kmeans_update_fn(
         ClusterGP,
         train_data,
         num_inducing_points,
     )
 
-    lpsvgp, _ = create_model_and_update_fn(
+    lpsvgp, _ = create_model_and_kmeans_update_fn(
         LpSVGP,
         train_data,
         num_inducing_points,
