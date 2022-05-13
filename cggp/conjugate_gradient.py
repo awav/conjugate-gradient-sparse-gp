@@ -156,8 +156,12 @@ class ConjugateGradient:
     def __call__(
         self, matrix: Tensor, rhs: Tensor, initial_solution: Optional[Tensor] = None
     ) -> Tensor:
+        rhs = tf.transpose(rhs)
+
         if initial_solution is None:
             initial_solution = tf.zeros_like(rhs)
+        else:
+            initial_solution = tf.transpose(initial_solution)
 
         max_iterations = self.max_iterations
         if max_iterations is None:
@@ -180,4 +184,5 @@ class ConjugateGradient:
             max_steps_cycle=max_steps_cycle,
         )
 
+        solution = tf.transpose(solution)
         return solution
