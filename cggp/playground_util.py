@@ -41,9 +41,9 @@ def create_model_and_kmeans_update_fn(model_class: ModelClass, data, num_inducin
     return model, update_fn
 
 
-def create_model_and_covertree_update_fn(model_class: ModelClass, data, max_radius: float):
+def create_model_and_covertree_update_fn(model_class: ModelClass, data, min_radius: float):
     model = create_model(model_class, kernel_fn, data)
-    update_fn = create_update_fn("covertree", model, data, max_radius=max_radius)
+    update_fn = create_update_fn("covertree", model, data, min_radius=min_radius)
 
     gpflow.utilities.set_trainable(model.inducing_variable, False)
     return model, update_fn

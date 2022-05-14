@@ -65,12 +65,12 @@ def create_kmeans_update_fn(
     return update_fn
 
 
-def create_covertree_update_fn(model, data, use_jit: bool = True, max_radius: float = 1.0):
+def create_covertree_update_fn(model, data, use_jit: bool = True, min_radius: float = 1.0):
     distance_fn = create_kernel_distance_fn(model.kernel, "covariance")
     distance_fn = jit(use_jit)(distance_fn)
 
     def update_fn():
-        return covertree_update_inducing_parameters(model, data, distance_fn, max_radius)
+        return covertree_update_inducing_parameters(model, data, distance_fn, min_radius)
 
     return update_fn
 

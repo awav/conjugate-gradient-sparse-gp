@@ -19,9 +19,9 @@ def covertree_update_inducing_parameters(
     model,
     data,
     distance_fn,
-    max_radius: float,
+    min_radius: float,
 ) -> Tuple[Tensor, Tensor, Tensor]:
-    covertree = ModifiedCoverTree(distance_fn, data, max_radius=max_radius)
+    covertree = ModifiedCoverTree(distance_fn, data, min_radius=min_radius)
     new_iv = covertree.centroids
     means, counts = covertree.cluster_mean_and_counts
 

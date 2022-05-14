@@ -52,18 +52,18 @@ class ModifiedCoverTree:
 
         root_mean = tf.reduce_mean(x, axis=-2)
         root_distances = self.distance((root_mean, x))
-        max_radius = tf.reduce_mean(root_distances)
+        min_radius = tf.reduce_mean(root_distances)
 
         if min_radius is not None:
-            num_levels = math.ceil(math.log2(max_radius / min_radius)) + 2
-            max_radius = min_radius * (2 ** (num_levels - 1))
+            num_levels = math.ceil(math.log2(min_radius / min_radius)) + 2
+            min_radius = min_radius * (2 ** (num_levels - 1))
 
-        node = CoverTreeNode(root_mean, max_radius, None, data)
+        node = CoverTreeNode(root_mean, min_radius, None, data)
         self.levels = [[] for _ in range(num_levels)]
         self.levels[0].append(node)
 
         for level in range(1, num_levels):
-            radius = max_radius / (2**level)
+            radius = min_radius / (2**level)
             for node in self.levels[level - 1]:
                 active_x, active_y = node.data
                 while tf.shape(active_x)[0] > 0:
