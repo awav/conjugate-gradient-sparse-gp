@@ -32,8 +32,8 @@ if __name__ == "__main__":
     batch_size = 500
     monitor_batch_size = 2000
     learning_rate = 0.01
-    use_jit = True
-    # use_jit = False
+    # use_jit = True
+    use_jit = False
     use_tb = True
     logdir = "./logs-compare-playground"
     update_during_training = True
@@ -54,23 +54,13 @@ if __name__ == "__main__":
         conjugate_gradient = ConjugateGradient(error_threshold)
         return CGGP(kernel, likelihood, iv, conjugate_gradient, **kwargs)
 
-    cggp, cggp_update_fn = create_model_and_kmeans_update_fn(
-        model_class,
-        train_data,
-        num_inducing_points,
+    create_fn = lambda fn: create_model_and_kmeans_update_fn(
+        fn, train_data, num_inducing_points, use_jit=use_jit
     )
 
-    clustergp, clustergp_update_fn = create_model_and_kmeans_update_fn(
-        ClusterGP,
-        train_data,
-        num_inducing_points,
-    )
-
-    lpsvgp, _ = create_model_and_kmeans_update_fn(
-        LpSVGP,
-        train_data,
-        num_inducing_points,
-    )
+    cggp, cggp_update_fn = create_fn(model_class)
+    clustergp, clustergp_update_fn = create_fn(ClusterGP)
+    lpsvgp, _ = create_fn(LpSVGP)
 
     iv, means, cluster_counts = cggp_update_fn()
 

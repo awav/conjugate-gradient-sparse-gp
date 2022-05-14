@@ -8,6 +8,7 @@ import math
 
 Tensor = tf.Tensor
 
+
 class CoverTreeNode:
     def __init__(
         self,
@@ -20,7 +21,7 @@ class CoverTreeNode:
         self.radius = radius
         self.parent = parent
         self.data = data
-        self.original_data = data.numpy()
+        self.original_data = data
         self.children = []
 
     def print(self, original_data):
@@ -40,7 +41,7 @@ class ModifiedCoverTree:
         self,
         distance: Callable,
         data,
-        min_radius: Optional[float] = None,
+        spatial_resolution: Optional[float] = None,
         num_levels: Optional[int] = 1,
     ):
         self.distance = distance
@@ -52,18 +53,18 @@ class ModifiedCoverTree:
 
         root_mean = tf.reduce_mean(x, axis=-2)
         root_distances = self.distance((root_mean, x))
-        min_radius = tf.reduce_mean(root_distances)
+        max_radius = tf.reduce_mean(root_distances)
 
-        if min_radius is not None:
-            num_levels = math.ceil(math.log2(min_radius / min_radius)) + 2
-            min_radius = min_radius * (2 ** (num_levels - 1))
+        if spatial_resolution is not None:
+            num_levels = math.ceil(math.log2(max_radius / spatial_resolution)) + 2
+            max_radius = spatial_resolution * (2 ** (num_levels - 1))
 
-        node = CoverTreeNode(root_mean, min_radius, None, data)
+        node = CoverTreeNode(root_mean, spatial_resolution, None, data)
         self.levels = [[] for _ in range(num_levels)]
         self.levels[0].append(node)
 
         for level in range(1, num_levels):
-            radius = min_radius / (2**level)
+            radius = max_radius / (2**level)
             for node in self.levels[level - 1]:
                 active_x, active_y = node.data
                 while tf.shape(active_x)[0] > 0:

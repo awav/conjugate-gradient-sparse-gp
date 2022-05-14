@@ -23,7 +23,9 @@ def kernel_fn(dim):
     return kernel
 
 
-def create_model_and_kmeans_update_fn(model_class: ModelClass, data, num_inducing_points: int):
+def create_model_and_kmeans_update_fn(
+    model_class: ModelClass, data, num_inducing_points: int, use_jit: bool = True
+):
     model = create_model(
         model_class,
         kernel_fn,
@@ -31,19 +33,18 @@ def create_model_and_kmeans_update_fn(model_class: ModelClass, data, num_inducin
         num_inducing_points=num_inducing_points,
     )
     update_fn = create_update_fn(
-        "kmeans",
-        model,
-        data,
-        num_inducing_points=num_inducing_points,
+        "kmeans", model, data, num_inducing_points=num_inducing_points, use_jit=use_jit
     )
 
     gpflow.utilities.set_trainable(model.inducing_variable, False)
     return model, update_fn
 
 
-def create_model_and_covertree_update_fn(model_class: ModelClass, data, min_radius: float):
+def create_model_and_covertree_update_fn(
+    model_class: ModelClass, data, spatial_resolution: float, use_jit: bool = True
+):
     model = create_model(model_class, kernel_fn, data)
-    update_fn = create_update_fn("covertree", model, data, min_radius=min_radius)
+    update_fn = create_update_fn("covertree", model, data, spatial_resolution=spatial_resolution, use_jit=use_jit)
 
     gpflow.utilities.set_trainable(model.inducing_variable, False)
     return model, update_fn
