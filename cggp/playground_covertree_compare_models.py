@@ -1,20 +1,12 @@
-from email.policy import default
-from kmeans import kmeans_indices_and_distances
 from models import ClusterGP, CGGP, LpSVGP
 from conjugate_gradient import ConjugateGradient
-from data import snelson1d, load_data
-import matplotlib.pyplot as plt
-import gpflow
+from data import load_data
 from gpflow.config import default_float
 import tensorflow as tf
 import numpy as np
 
-from playground_util import create_model_and_covertree_update_fn
-
-from optimize import (
-    train_using_adam_and_update,
-    create_monitor,
-)
+from cli_utils import create_model_and_covertree_update_fn
+from optimize import train_using_adam_and_update, create_monitor
 
 
 if __name__ == "__main__":
@@ -54,7 +46,7 @@ if __name__ == "__main__":
         return CGGP(kernel, likelihood, iv, conjugate_gradient, **kwargs)
 
     create_fn = lambda fn: create_model_and_covertree_update_fn(
-        fn, train_data, resolution, use_jit=use_jit
+        fn, train_data, resolution, use_jit=use_jit, distance_type=distance_type
     )
 
     cggp, cggp_update_fn = create_fn(model_class)

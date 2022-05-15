@@ -1,3 +1,4 @@
+from email.policy import default
 from typing import Tuple
 from xml.sax.handler import property_declaration_handler
 import numpy as np
@@ -66,15 +67,22 @@ class LpSVGP(gpflow.models.GPModel, gpflow.models.ExternalDataTrainingLossMixin)
         inducing_variable = gpflow.models.util.inducingpoint_wrapper(inducing_variable)
         self.inducing_variable = inducing_variable
 
+        # NOTE(awav): tf.shape returns a shape without nones, whereas
+        #             *.shape returns a shape with nones
+        m_actual = inducing_variable.num_inducing
+        m = inducing_variable.Z.shape[0]
+        param_shape = (m_actual, num_latent_gps)
+        shape = (m, num_latent_gps)
+        dtype = default_float()
+
         # init variational parameters
-        m = inducing_variable.num_inducing
         self.num_latent_gps = num_latent_gps
 
-        nu = np.zeros((m, num_latent_gps)) if nu is None else nu
-        var = np.ones((m, num_latent_gps)) * 1e-4 if diag_variance is None else diag_variance
+        nu = np.zeros(param_shape) if nu is None else nu
+        var = np.ones(param_shape) * 1e-4 if diag_variance is None else diag_variance
 
-        self._nu = Parameter(nu, dtype=default_float())
-        self._diag_variance = Parameter(var, dtype=default_float(), transform=positive())
+        self._nu = Parameter(nu, dtype=dtype, shape=shape)
+        self._diag_variance = Parameter(var, dtype=dtype, shape=shape, transform=positive())
 
     @property
     def nu(self):
@@ -180,13 +188,21 @@ class ClusterGP(LpSVGP):
         del self._nu
         del self._diag_variance
 
-        counts = tf.ones_like(self.pseudo_u)
-        self.cluster_counts = tf.Variable(counts, dtype=self.pseudo_u.dtype, trainable=False)
-        if cluster_counts is not None:
-            self.cluster_counts.assign(cluster_counts)
-
         if pseudo_u is not None:
+            if tf.shape(pseudo_u) != tf.shape(self.pseudo_u):
+                raise ValueError("Pseudo-u argument shape must match actual pseudo-u shape.")
             self.pseudo_u.assign(pseudo_u)
+
+        if cluster_counts is not None:
+            if tf.shape(cluster_counts) != tf.shape(self.pseudo_u):
+                raise ValueError("Cluster counts argument shape must match pseudo-u shape.")
+            counts = cluster_counts
+        else:
+            counts = tf.ones_like(self.pseudo_u)
+
+        shape = self.pseudo_u.shape
+        dtype = self.pseudo_u.dtype
+        self.cluster_counts = tf.Variable(counts, dtype=dtype, shape=shape, trainable=False)
 
         gpflow.utilities.set_trainable(self.inducing_variable, False)
         gpflow.utilities.set_trainable(self.pseudo_u, False)
