@@ -77,7 +77,6 @@ class ModifiedCoverTree:
                     child = CoverTreeNode(point, radius, node, neighborhood)
                     self.levels[level].append(child)
                     node.children.append(child)
-                    n = tf.shape(active_x)[0]
                     active_x = tf.boolean_mask(active_x, ~indices)
                     active_y = tf.boolean_mask(active_y, ~indices)
 

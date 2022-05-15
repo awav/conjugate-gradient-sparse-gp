@@ -14,7 +14,7 @@ if __name__ == "__main__":
     np.random.seed(seed)
     tf.random.set_seed(seed)
 
-    _, train_data, test_data = load_data("snelson1d")
+    _, train_data, test_data = load_data("elevators")
     distance_type = "euclidean"
     num_inducing_points = 500
     num_iterations = 1000
@@ -22,12 +22,13 @@ if __name__ == "__main__":
     batch_size = 500
     monitor_batch_size = 2000
     learning_rate = 0.01
-    use_jit = True
-    # use_jit = False
+    # use_jit = True
+    use_jit = False
     use_tb = True
     logdir = "./logs-compare-covertree-playground"
     update_during_training = True
-    resolution = 0.1
+    resolution = 10.0
+    # resolution = 0.1
 
     slice_size = 5000
     x, y = train_data
