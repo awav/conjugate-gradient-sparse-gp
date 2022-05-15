@@ -53,7 +53,7 @@ class ModifiedCoverTree:
 
         root_mean = tf.reduce_mean(x, axis=-2)
         root_distances = self.distance((root_mean, x))
-        max_radius = tf.reduce_mean(root_distances)
+        max_radius = tf.reduce_max(root_distances)
 
         if spatial_resolution is not None:
             num_levels = math.ceil(math.log2(max_radius / spatial_resolution)) + 2
@@ -81,6 +81,8 @@ class ModifiedCoverTree:
                     active_x = tf.boolean_mask(active_x, ~indices)
                     active_y = tf.boolean_mask(active_y, ~indices)
 
+        return None
+
     @property
     def centroids(self):
         return tf.stack([node.point for node in self.levels[-1]])
@@ -98,4 +100,4 @@ class ModifiedCoverTree:
         dtype = self.levels[-1][0].data[1].dtype
         means, counts = zip(*means_and_counts)
         ctt = tf.convert_to_tensor
-        return ctt(means, dtype=dtype), ctt(counts, dtype=dtype)
+        return ctt(means, dtype=dtype)[..., None], ctt(counts, dtype=dtype)[..., None]
