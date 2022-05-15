@@ -22,7 +22,7 @@ if __name__ == "__main__":
     batch_size = 500
     monitor_batch_size = 2000
     learning_rate = 0.01
-    use_jit = True
+    use_jit = False
     # use_jit = False
     use_tb = True
     logdir = "./logs-compare-covertree-playground"
