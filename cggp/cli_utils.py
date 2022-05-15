@@ -6,7 +6,7 @@ import numpy as np
 import tensorflow as tf
 
 from kmeans import kmeans_lloyd
-from distance import create_kernel_distance_fn, DistanceType
+from distance import create_distance_fn, DistanceType
 from optimize import kmeans_update_inducing_parameters, covertree_update_inducing_parameters
 from utils import jit
 from models import LpSVGP, ClusterGP
@@ -51,7 +51,7 @@ def create_kmeans_update_fn(
     distance_type: DistanceType = "covariance",
 ):
     x, _ = data
-    distance_fn = create_kernel_distance_fn(model.kernel, distance_type)
+    distance_fn = create_distance_fn(model.kernel, distance_type)
     distance_fn = jit(use_jit)(distance_fn)
 
     @jit(use_jit)
@@ -75,7 +75,7 @@ def create_covertree_update_fn(
     spatial_resolution: float = 1.0,
     distance_type: DistanceType = "covariance",
 ):
-    distance_fn = create_kernel_distance_fn(model.kernel, distance_type)
+    distance_fn = create_distance_fn(model.kernel, distance_type)
     distance_fn = jit(use_jit)(distance_fn)
 
     def update_fn():

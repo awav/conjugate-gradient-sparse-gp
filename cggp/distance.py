@@ -6,7 +6,12 @@ Tensor = tf.Tensor
 DistanceType = Literal["euclidean", "covariance", "correlation"]
 
 
-def create_kernel_distance_fn(kernel: gpflow.kernels.Kernel, distance_type: DistanceType):
+def euclid_distance(args):
+    x, y = args
+    return tf.linalg.norm(x - y, axis=-1)
+
+
+def create_distance_fn(kernel: gpflow.kernels.Kernel, distance_type: DistanceType):
     def cov(args):
         x, y = args
         x_dist = kernel(x, full_cov=False)
@@ -24,11 +29,6 @@ def create_kernel_distance_fn(kernel: gpflow.kernels.Kernel, distance_type: Dist
         xy_dist = kernel(x, y)
         return 1.0 - xy_dist / tf.sqrt(x_dist * y_dist)
 
-    functions = {"covariance": cov, "correlation": cor}
+    functions = {"covariance": cov, "correlation": cor, "euclidean": euclid_distance}
     func = functions[distance_type]
     return func
-
-
-def euclid_distance(args):
-    x, y = args
-    return tf.linalg.norm(x - y, axis=-1)

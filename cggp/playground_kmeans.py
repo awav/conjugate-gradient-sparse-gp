@@ -4,7 +4,7 @@ from gpflow.kernels import SquaredExponential
 import tensorflow as tf
 
 from kmeans import kmeans_lloyd, kmeans_indices_and_distances
-from distance import create_kernel_distance_fn
+from distance import create_distance_fn
 
 
 if __name__ == "__main__":
@@ -15,7 +15,7 @@ if __name__ == "__main__":
     kernel = SquaredExponential(lengthscales=10.0)
     # distance_type = "correlation"
     distance_type = "covariance"
-    distance_fn = create_kernel_distance_fn(kernel, distance_type=distance_type)
+    distance_fn = create_distance_fn(kernel, distance_type=distance_type)
     points = tf.random.normal((n, d), dtype=tf.float64)
     points_numpy = points.numpy()
 

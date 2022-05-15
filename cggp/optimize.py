@@ -112,9 +112,8 @@ def train_vanilla_using_lbfgs(
 def train_using_lbfgs_and_update(
     data,
     model: ClusterGP,
-    clustering_fn: Callable,
+    update_fn: Callable,
     max_num_iters: int,
-    distance_fn: Optional[Callable] = None,
     use_jit: bool = True,
 ):
     lbfgs = gpflow.optimizers.Scipy()
@@ -122,18 +121,15 @@ def train_using_lbfgs_and_update(
     loss_fn = model.training_loss_closure(data, compile=False)
     variables = model.trainable_variables
 
-    def update_variational_parameters(*args, **kwargs):
-        kmeans_update_inducing_parameters(model, data, distance_fn, clustering_fn)
-
     gpflow.utilities.set_trainable(model.inducing_variable, False)
 
     # for _ in range(outer_num_iters):
-    update_variational_parameters()
+    update_fn()
     if max_num_iters > 0:
         result = lbfgs.minimize(
             loss_fn,
             variables,
-            step_callback=update_variational_parameters,
+            step_callback=update_fn,
             compile=use_jit,
             options=options,
         )

@@ -59,7 +59,7 @@ class ModifiedCoverTree:
             num_levels = math.ceil(math.log2(max_radius / spatial_resolution)) + 2
             max_radius = spatial_resolution * (2 ** (num_levels - 1))
 
-        node = CoverTreeNode(root_mean, spatial_resolution, None, data)
+        node = CoverTreeNode(root_mean, max_radius, None, data)
         self.levels = [[] for _ in range(num_levels)]
         self.levels[0].append(node)
 
@@ -68,7 +68,7 @@ class ModifiedCoverTree:
             for node in self.levels[level - 1]:
                 active_x, active_y = node.data
                 while tf.shape(active_x)[0] > 0:
-                    point = (0.75 * active_x[0]) + (0.25 * node.point)
+                    point = (0.75 * active_x[0, ...]) + (0.25 * node.point)
                     distances = self.distance((point, active_x))
                     indices = distances <= radius
                     neighborhood_x = tf.boolean_mask(active_x, indices)
