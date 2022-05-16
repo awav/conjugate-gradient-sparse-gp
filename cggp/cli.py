@@ -1,9 +1,10 @@
 import ast
+from email.policy import default
 import json
 from functools import partial
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Tuple, Union, List
+from typing import Callable, Literal, Tuple, Union, List
 
 import click
 import gpflow
@@ -12,9 +13,9 @@ import tensorflow as tf
 
 from gpflow.kernels import Matern32, SquaredExponential
 
-from cli_utils import create_model, create_update_fn
+from distance import DistanceType
+from cli_utils import create_model, create_update_fn, ClusteringType
 from data import load_data, DatasetBundle
-from monitor import Monitor
 from optimize import train_using_adam_and_update, create_monitor
 from models import CGGP, LpSVGP, ClusterGP
 from conjugate_gradient import ConjugateGradient
@@ -134,17 +135,25 @@ def main(
     ctx.obj = obj
 
 
+__distance_types = click.Choice(["covariance", "correlation", "euclidean"])
+__clustering_types = click.Choice(["covertree", "kmeans"])
+
+
 @main.command()
 @click.option("-n", "--num-iterations", type=int, required=True)
-@click.option("-m", "--num-inducing-points", type=int, required=True)
 @click.option("-b", "--batch-size", type=int, required=True)
+@click.option("-m", "--num-inducing-points", type=int)
+@click.option("-d", "--distance-type", type=__distance_types, default="covariance")
+@click.option("-c", "--clustering-type", type=__clustering_types, default="kmeans")
 @click.option("-l", "--learning-rate", type=float, default=0.01)
 @click.option("-e", "--error-threshold", type=float, default=1e-5)
 @click.pass_context
 def train_cggp_adam(
     ctx: click.Context,
     num_iterations: int,
-    num_inducing_points: int,
+    num_inducing_points: Union[int, None],
+    distance_type: DistanceType,
+    clustering_type: ClusteringType,
     batch_size: int,
     learning_rate: float,
     error_threshold: float,
@@ -174,6 +183,8 @@ def train_cggp_adam(
         "train_size": train_data[0].shape[0],
         "test_size": test_data[0].shape[0],
         "input_dimension": train_data[0].shape[-1],
+        "clustering_type": clustering_type,
+        "distance_type": distance_type,
     }
 
     info_str = json.dumps(info, indent=2)
@@ -183,10 +194,19 @@ def train_cggp_adam(
         conjugate_gradient = ConjugateGradient(error_threshold)
         return CGGP(kernel, likelihood, iv, conjugate_gradient, **kwargs)
 
-    clustering_type = "kmeans"
-    model = create_model(model_fn, kernel_fn, train_data, num_inducing_points)
+    model = create_model(
+        model_fn,
+        kernel_fn,
+        train_data,
+        num_inducing_points=num_inducing_points,
+    )
     update_fn = create_update_fn(
-        clustering_type, model, train_data, num_inducing_points, use_jit=jit
+        clustering_type,
+        model,
+        train_data,
+        num_inducing_points,
+        use_jit=jit,
+        distance_type=distance_type,
     )
     monitor_batch_size = batch_size * 5
     monitor = create_monitor(

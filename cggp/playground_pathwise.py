@@ -5,7 +5,8 @@ import tensorflow as tf
 import numpy as np
 from numpy import newaxis
 
-from playground_util import create_model, train_using_lbfgs_and_update
+from cli_utils import create_model_and_kmeans_update_fn
+from optimize import train_using_lbfgs_and_update
 
 import matplotlib.pyplot as plt
 
@@ -22,22 +23,24 @@ def setup():
     distance_type = "covariance"
     num_inducing_points = 30
     num_iterations = 1000
+    use_jit = False
 
     x, y = train_data
 
     model_class = ClusterGP
-    data, experimental_model, clustering_fn, distance_fn = create_model(
-        (x, y),
-        num_inducing_points,
-        distance_type,
+    experimental_model, update_fn = create_model_and_kmeans_update_fn(
         model_class,
+        train_data,
+        num_inducing_points,
+        distance_type=distance_type,
+        use_jit=use_jit
     )
 
     num_iterations = 100
     opt_res = train_using_lbfgs_and_update(
-        data,
+        train_data,
         experimental_model,
-        clustering_fn,
+        update_fn,
         num_iterations,
     )
 
@@ -45,11 +48,11 @@ def setup():
         experimental_model.kernel,
         experimental_model.likelihood,
         experimental_model.inducing_variable,
-        diag_variance=experimental_model.diag_variance,
+        cluster_counts=experimental_model.cluster_counts,
         pseudo_u=experimental_model.pseudo_u,
     )
 
-    return data, experimental_model, pathwise_model
+    return train_data, experimental_model, pathwise_model
 
 
 def test_likelihood_terms():

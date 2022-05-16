@@ -5,7 +5,7 @@ from gpflow.config import default_float
 import tensorflow as tf
 import numpy as np
 
-from cli_utils import create_model_and_kmeans_update_fn
+from cli_utils import create_model_and_covertree_update_fn
 from optimize import train_using_adam_and_update, create_monitor
 
 
@@ -15,7 +15,7 @@ if __name__ == "__main__":
     tf.random.set_seed(seed)
 
     _, train_data, test_data = load_data("elevators")
-    distance_type = "covariance"
+    distance_type = "euclidean"
     num_inducing_points = 500
     num_iterations = 1000
 
@@ -25,8 +25,11 @@ if __name__ == "__main__":
     # use_jit = True
     use_jit = False
     use_tb = True
-    logdir = "./logs-compare-playground"
-    update_during_training = True
+    logdir = "./logs-compare-covertree-playground"
+    # update_during_training = True
+    update_during_training = None
+    resolution = 2.0
+    # resolution = 0.1
 
     slice_size = 5000
     x, y = train_data
@@ -44,8 +47,8 @@ if __name__ == "__main__":
         conjugate_gradient = ConjugateGradient(error_threshold)
         return CGGP(kernel, likelihood, iv, conjugate_gradient, **kwargs)
 
-    create_fn = lambda fn: create_model_and_kmeans_update_fn(
-        fn, train_data, num_inducing_points, use_jit=use_jit, distance_type=distance_type
+    create_fn = lambda fn: create_model_and_covertree_update_fn(
+        fn, train_data, resolution, use_jit=use_jit, distance_type=distance_type
     )
 
     cggp, cggp_update_fn = create_fn(model_class)

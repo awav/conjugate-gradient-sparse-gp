@@ -6,7 +6,7 @@ import gpflow
 import tensorflow as tf
 import numpy as np
 
-from playground_util import create_model
+from cli_utils import create_model_and_kmeans_update_fn, create_distance_fn
 from optimize import (
     train_vanilla_using_lbfgs,
     train_using_lbfgs_and_update,
@@ -38,22 +38,26 @@ if __name__ == "__main__":
 
     # model_class = LpSVGP
     model_class = ClusterGP
-    data, experimental_model, clustering_fn, distance_fn = create_model(
-        (x, y),
-        num_inducing_points,
-        distance_type,
+    experimental_model, update_fn = create_model_and_kmeans_update_fn(
         model_class,
+        train_data,
+        num_inducing_points,
+        distance_type=distance_type,
     )
-    xt, _ = data
+
+    distance_fn = create_distance_fn(model.kernel, distance_type)
+    distance_fn = jit(use_jit)(distance_fn)
+
+    xt, _ = train_data
 
     if model_class == LpSVGP:
         opt_result = train_vanilla_using_lbfgs(
-            data, experimental_model, clustering_fn, num_iterations
+            train_data, experimental_model, update_fn, num_iterations
         )
     elif model_class == ClusterGP:
         outer_num_iters = 100
         opt_result = train_using_lbfgs_and_update(
-            data, experimental_model, clustering_fn, num_iterations
+            train_data, experimental_model, update_fn, num_iterations
         )
     else:
         print("No hyperparameter tuning!")
