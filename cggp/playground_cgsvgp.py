@@ -7,7 +7,8 @@ import gpflow
 import tensorflow as tf
 import numpy as np
 
-from playground_util import create_model
+from cli_utils import create_model_and_kmeans_update_fn
+from distance import create_distance_fn
 
 from optimize import (
     kmeans_update_inducing_parameters,
@@ -47,19 +48,16 @@ if __name__ == "__main__":
         conjugate_gradient = ConjugateGradient(error_threshold)
         return CGGP(kernel, likelihood, iv, conjugate_gradient)
 
-    data, experimental_model, clustering_fn, distance_fn = create_model(
-        (x, y),
-        num_inducing_points,
-        distance_type,
+    experimental_model, update_fn = create_model_and_kmeans_update_fn(
         model_class,
+        train_data,
+        num_inducing_points,
+        distance_type=distance_type,
     )
 
-    def update_fn():
-        kmeans_update_inducing_parameters(experimental_model, data, distance_fn, clustering_fn)
-
+    distance_fn = create_distance_fn(experimental_model.kernel, distance_type=distance_type)
     update_fn()
-
-    xt, _ = data
+    xt, _ = train_data
 
     num_iterations = 100
     batch_size = 25
@@ -67,12 +65,12 @@ if __name__ == "__main__":
     use_jit = False
 
     opt_result = train_using_adam_and_update(
-        data,
+        train_data,
         experimental_model,
         num_iterations,
         batch_size,
         learning_rate,
-        update_fn,
+        update_fn=update_fn,
         use_jit=use_jit,
     )
 
@@ -96,7 +94,7 @@ if __name__ == "__main__":
         experimental_model.likelihood,
         experimental_model.inducing_variable,
         pseudo_u=experimental_model.pseudo_u,
-        diag_variance=experimental_model.diag_variance,
+        cluster_counts=experimental_model.cluster_counts,
     )
 
     gpr_model = gpflow.models.GPR(train_data, kernel=kernel, noise_variance=noise)

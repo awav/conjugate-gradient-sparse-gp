@@ -8,6 +8,7 @@ import math
 
 Tensor = tf.Tensor
 
+
 class CoverTreeNode:
     def __init__(
         self,
@@ -20,7 +21,7 @@ class CoverTreeNode:
         self.radius = radius
         self.parent = parent
         self.data = data
-        self.original_data = data.numpy()
+        self.original_data = data
         self.children = []
 
     def print(self, original_data):
@@ -40,7 +41,7 @@ class ModifiedCoverTree:
         self,
         distance: Callable,
         data,
-        min_radius: Optional[float] = None,
+        spatial_resolution: Optional[float] = None,
         num_levels: Optional[int] = 1,
     ):
         self.distance = distance
@@ -52,11 +53,11 @@ class ModifiedCoverTree:
 
         root_mean = tf.reduce_mean(x, axis=-2)
         root_distances = self.distance((root_mean, x))
-        max_radius = tf.reduce_mean(root_distances)
+        max_radius = tf.reduce_max(root_distances)
 
-        if min_radius is not None:
-            num_levels = math.ceil(math.log2(max_radius / min_radius)) + 2
-            max_radius = min_radius * (2 ** (num_levels - 1))
+        if spatial_resolution is not None:
+            num_levels = math.ceil(math.log2(max_radius / spatial_resolution)) + 2
+            max_radius = spatial_resolution * (2 ** (num_levels - 1))
 
         node = CoverTreeNode(root_mean, max_radius, None, data)
         self.levels = [[] for _ in range(num_levels)]
@@ -67,7 +68,7 @@ class ModifiedCoverTree:
             for node in self.levels[level - 1]:
                 active_x, active_y = node.data
                 while tf.shape(active_x)[0] > 0:
-                    point = (0.75 * active_x[0]) + (0.25 * node.point)
+                    point = (0.75 * active_x[0, ...]) + (0.25 * node.point)
                     distances = self.distance((point, active_x))
                     indices = distances <= radius
                     neighborhood_x = tf.boolean_mask(active_x, indices)
@@ -76,9 +77,10 @@ class ModifiedCoverTree:
                     child = CoverTreeNode(point, radius, node, neighborhood)
                     self.levels[level].append(child)
                     node.children.append(child)
-                    n = tf.shape(active_x)[0]
                     active_x = tf.boolean_mask(active_x, ~indices)
                     active_y = tf.boolean_mask(active_y, ~indices)
+
+        return None
 
     @property
     def centroids(self):
@@ -97,4 +99,4 @@ class ModifiedCoverTree:
         dtype = self.levels[-1][0].data[1].dtype
         means, counts = zip(*means_and_counts)
         ctt = tf.convert_to_tensor
-        return ctt(means, dtype=dtype), ctt(counts, dtype=dtype)
+        return ctt(means, dtype=dtype)[..., None], ctt(counts, dtype=dtype)[..., None]

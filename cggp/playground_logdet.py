@@ -5,7 +5,9 @@ import gpflow
 from models import ClusterGP
 from data import snelson1d
 
-from playground_util import create_model, train_using_lbfgs_and_update
+from cli_utils import create_model_and_kmeans_update_fn
+from optimize import train_using_lbfgs_and_update
+
 from utils import add_diagonal
 from conjugate_gradient import conjugate_gradient
 
@@ -26,13 +28,12 @@ def logdet_gradient_estimation():
         gradient, stats = conjugate_gradient(matrix, identity, initial_solution, threshold)
         gradient = tf.transpose(gradient)
         return gradient, stats
-    
+
     def gradient_logdet_solve(matrix):
         dtype = matrix.dtype
         identity = tf.linalg.diag(tf.ones(matrix.shape[0], dtype=dtype))
         gradient = tf.linalg.solve(matrix, identity)
         return gradient
-
 
     seed = 111
     np.random.seed(seed)
@@ -43,14 +44,14 @@ def logdet_gradient_estimation():
     num_inducing_points = 20
 
     model_class = ClusterGP
-    data, model, clustering_fn, distance_fn = create_model(
+    model, update_fn = create_model_and_kmeans_update_fn(
+        model_class,
         train_data,
         num_inducing_points,
-        distance_type,
-        model_class,
+        distance_type=distance_type,
     )
 
-    opt_res = train_using_lbfgs_and_update(data, model, clustering_fn, 0)
+    opt_res = train_using_lbfgs_and_update(train_data, model, update_fn, 0)
 
     iv = model.inducing_variable
     kuu = gpflow.covariances.Kuu(iv, model.kernel)

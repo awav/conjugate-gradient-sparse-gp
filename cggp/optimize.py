@@ -19,8 +19,9 @@ def covertree_update_inducing_parameters(
     model,
     data,
     distance_fn,
+    spatial_resolution: float,
 ) -> Tuple[Tensor, Tensor, Tensor]:
-    covertree = ModifiedCoverTree(distance_fn, data)
+    covertree = ModifiedCoverTree(distance_fn, data, spatial_resolution=spatial_resolution)
     new_iv = covertree.centroids
     means, counts = covertree.cluster_mean_and_counts
 
@@ -111,9 +112,8 @@ def train_vanilla_using_lbfgs(
 def train_using_lbfgs_and_update(
     data,
     model: ClusterGP,
-    clustering_fn: Callable,
+    update_fn: Callable,
     max_num_iters: int,
-    distance_fn: Optional[Callable] = None,
     use_jit: bool = True,
 ):
     lbfgs = gpflow.optimizers.Scipy()
@@ -121,18 +121,15 @@ def train_using_lbfgs_and_update(
     loss_fn = model.training_loss_closure(data, compile=False)
     variables = model.trainable_variables
 
-    def update_variational_parameters(*args, **kwargs):
-        kmeans_update_inducing_parameters(model, data, distance_fn, clustering_fn)
-
     gpflow.utilities.set_trainable(model.inducing_variable, False)
 
     # for _ in range(outer_num_iters):
-    update_variational_parameters()
+    update_fn()
     if max_num_iters > 0:
         result = lbfgs.minimize(
             loss_fn,
             variables,
-            step_callback=update_variational_parameters,
+            step_callback=update_fn,
             compile=use_jit,
             options=options,
         )
@@ -156,6 +153,7 @@ def train_using_adam_and_update(
     data_iter = iter(dataset)
 
     update_during_training = update_during_training and (update_fn is not None)
+
     def internal_update_fn():
         if update_fn is not None:
             update_fn()
