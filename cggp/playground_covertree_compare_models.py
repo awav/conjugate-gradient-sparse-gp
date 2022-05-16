@@ -26,8 +26,9 @@ if __name__ == "__main__":
     use_jit = False
     use_tb = True
     logdir = "./logs-compare-covertree-playground"
-    update_during_training = True
-    resolution = 10.0
+    # update_during_training = True
+    update_during_training = None
+    resolution = 2.0
     # resolution = 0.1
 
     slice_size = 5000
