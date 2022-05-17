@@ -114,15 +114,18 @@ def gen_wasserstein_condition_numbers(
     return condition_numbers, num_inducing_points, wasserstein_distances
 
 
-def sample_gpr_prior(kernel, inputs):
+def sample_gpr_prior(kernel, inputs, num_samples: int = 1):
     mean = tf.zeros((1, tf.shape(inputs)[0]), dtype=inputs.dtype)
     cov = kernel(inputs, full_cov=True)
     # config = gpflow.config.Config(jitter=0.0)
     config = gpflow.config.Config()
     cov = cov[None, ...]
     with gpflow.config.as_context(config):
-        output = gpflow.conditionals.util.sample_mvn(mean, cov, full_cov=True, num_samples=1)
-    return tf.squeeze(output)[..., None]
+        output = gpflow.conditionals.util.sample_mvn(
+            mean, cov, full_cov=True, num_samples=num_samples
+        )
+    output_samples = output[:, 0, ...]
+    return output_samples[..., None]
 
 
 def paper_visualization():
@@ -139,7 +142,9 @@ def paper_visualization():
 
     n = 1000
     b = 5
-    dims = [1, 2, 4, 8]
+    # dims = [1, 2, 4, 8]
+    dims = [1, 2]
+    num_samples = 1
     data_frame = {"resolutions": resolutions}
 
     for dim in dims:
@@ -150,33 +155,35 @@ def paper_visualization():
         kernel = kernel_fn(dim)
         kernel.lengthscales.assign(lengthscales)
 
-        yt = sample_gpr_prior(kernel, xt)
-        data = (xt, yt)
-        gpr = gpflow.models.GPR(data, kernel, noise_variance=noise)
+        yt = sample_gpr_prior(kernel, xt, num_samples=num_samples)
+        for s in range(num_samples):
+            data = (xt, yt[s])
+            gpr = gpflow.models.GPR(data, kernel, noise_variance=noise)
 
-        metrics = gen_wasserstein_condition_numbers(
-            gpr, data, resolutions, distance_type=distance_type, use_jit=use_jit
-        )
+            metrics = gen_wasserstein_condition_numbers(
+                gpr, data, resolutions, distance_type=distance_type, use_jit=use_jit
+            )
 
-        (
-            condition_numbers,
-            num_inducing_points,
-            wasserstein_distances,
-        ) = metrics
+            (
+                condition_numbers,
+                num_inducing_points,
+                wasserstein_distances,
+            ) = metrics
 
-        data_frame[f"condition_numbers_{dim}"] = condition_numbers
-        data_frame[f"num_inducing_points_{dim}"] = num_inducing_points
-        data_frame[f"wasserstein_distances_{dim}"] = wasserstein_distances
+            data_frame[f"condition_numbers_{dim}_{s}"] = np.array(condition_numbers)
+            data_frame[f"num_inducing_points_{dim}_{s}"] = np.array(num_inducing_points)
+            data_frame[f"wasserstein_distances_{dim}_{s}"] = np.array(wasserstein_distances)
 
-        plot(data, noise, resolutions, *metrics)
+            plot(data, noise, resolutions, *metrics)
 
     dirpath = str(Path(Path(__file__).parent))
-    store_metrics(dirpath, noise, lengthscale, storage)
+    store_metrics(dirpath, noise, lengthscale, data_frame)
     print()
 
 
 def store_metrics(dirpath, noise, lengthscale, storage):
     import pandas as pd
+
     df = pd.DataFrame(data=storage)
     filename = f"metric_data_noise_{noise}_lengthscale_{lengthscale}.csv"
     filepath = str(Path(dirpath, filename))
