@@ -14,30 +14,30 @@ if __name__ == "__main__":
     np.random.seed(seed)
     tf.random.set_seed(seed)
 
-    _, train_data, test_data = load_data("africa")
+    as_tensor = True
+    _, train_data, test_data = load_data("africa", as_tensor=as_tensor)
     distance_type = "covariance"
-    num_inducing_points = 500
+    num_inducing_points = 2000
     num_iterations = 1000
 
-    batch_size = 500
+    batch_size = 1000
     monitor_batch_size = 2000
     learning_rate = 0.01
     use_jit = True
     # use_jit = False
     use_tb = True
-    logdir = "./logs-compare-playground"
+    logdir = "./logs-africa"
     update_during_training = True
 
-    slice_size = 5000
-    x, y = train_data
-    xt, yt = test_data
-    x = tf.convert_to_tensor(x[:slice_size], dtype=default_float())
-    y = tf.convert_to_tensor(y[:slice_size], dtype=default_float())
-    xt = tf.convert_to_tensor(xt[:slice_size], dtype=default_float())
-    yt = tf.convert_to_tensor(yt[:slice_size], dtype=default_float())
-
-    train_data = (x, y)
-    test_data = (xt, yt)
+    # slice_size = 5000
+    # x, y = train_data
+    # xt, yt = test_data
+    # x = tf.convert_to_tensor(x[:slice_size], dtype=default_float())
+    # y = tf.convert_to_tensor(y[:slice_size], dtype=default_float())
+    # xt = tf.convert_to_tensor(xt[:slice_size], dtype=default_float())
+    # yt = tf.convert_to_tensor(yt[:slice_size], dtype=default_float())
+    # train_data = (x, y)
+    # test_data = (xt, yt)
 
     def model_class(kernel, likelihood, iv, **kwargs):
         error_threshold = 1e-6
