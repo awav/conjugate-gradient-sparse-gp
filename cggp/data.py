@@ -60,6 +60,24 @@ def snelson1d(target_dir: str = ".datasets/snelson1d"):
     return (X, Y), (X, Y)
 
 
+def east_africa(dirpath: str):
+    import pandas as pd
+
+    test_filename = "east_africa_test.csv"
+    test_filepath = Path(dirpath, test_filename)
+    test = np.array(pd.read_csv(test_filepath))
+    test_x, test_y = test[:, :-1], test[:, -1:]
+    test_data = test_x, test_y
+
+    train_filename = "east_africa_train.csv"
+    train_filepath = Path(dirpath, train_filename)
+    train = np.array(pd.read_csv(train_filepath))
+    train_x, train_y = train[:, :-1], train[:, -1:]
+    train_data = train_x, train_y
+
+    return train_data, test_data
+
+
 def norm(x: np.ndarray) -> np.ndarray:
     """Normalise array with mean and variance."""
     mu = np.mean(x, axis=0, keepdims=True)
@@ -75,6 +93,8 @@ def norm_dataset(data: Dataset) -> Dataset:
 def load_data(name: str, as_tensor: bool = False) -> DatasetBundle:
     if name == "snelson1d":
         train, test = snelson1d("~/.dataset/snelson1d/")
+    elif name == "east_africa":
+        train, test = east_africa("~/.datasets/east_africa")
     else:
         uci_name = name
         if not name.startswith("Wilson_"):
