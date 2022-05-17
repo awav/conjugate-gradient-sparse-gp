@@ -1,7 +1,6 @@
 from models import ClusterGP, CGGP, LpSVGP
 from conjugate_gradient import ConjugateGradient
 from data import load_data
-from gpflow.config import default_float
 import tensorflow as tf
 import numpy as np
 
@@ -15,7 +14,7 @@ if __name__ == "__main__":
     tf.random.set_seed(seed)
 
     as_tensor = True
-    _, train_data, test_data = load_data("africa", as_tensor=as_tensor)
+    _, train_data, test_data = load_data("east_africa", as_tensor=as_tensor)
     distance_type = "covariance"
     num_inducing_points = 2000
     num_iterations = 1000
