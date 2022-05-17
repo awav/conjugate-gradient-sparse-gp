@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Callable, Tuple, Optional
 import numpy as np
 import tensorflow as tf
@@ -130,7 +131,7 @@ def paper_visualization():
     np.random.seed(seed)
 
     noise = 0.02
-    lengthscale = [0.5]
+    lengthscale = 0.5
     dtype = gpflow.config.default_float()
     distance_type = "euclidean"
     use_jit = True
@@ -138,12 +139,12 @@ def paper_visualization():
 
     n = 1000
     b = 5
-
-    dims = [1, 2, 5, 10]
+    dims = [1, 2, 4, 8]
+    data_frame = {"resolutions": resolutions}
 
     for dim in dims:
         rng = np.random.RandomState(seed)
-        lengthscales = lengthscale * dim
+        lengthscales = [lengthscale * np.sqrt(dim)] * dim
         x = rng.rand(n, dim) * 2 * b - b
         xt = tf.convert_to_tensor(x, dtype=dtype)
         kernel = kernel_fn(dim)
@@ -157,9 +158,29 @@ def paper_visualization():
             gpr, data, resolutions, distance_type=distance_type, use_jit=use_jit
         )
 
+        (
+            condition_numbers,
+            num_inducing_points,
+            wasserstein_distances,
+        ) = metrics
+
+        data_frame[f"condition_numbers_{dim}"] = condition_numbers
+        data_frame[f"num_inducing_points_{dim}"] = num_inducing_points
+        data_frame[f"wasserstein_distances_{dim}"] = wasserstein_distances
+
         plot(data, noise, resolutions, *metrics)
 
+    dirpath = str(Path(Path(__file__).parent))
+    store_metrics(dirpath, noise, lengthscale, storage)
     print()
+
+
+def store_metrics(dirpath, noise, lengthscale, storage):
+    import pandas as pd
+    df = pd.DataFrame(data=storage)
+    filename = f"metric_data_noise_{noise}_lengthscale_{lengthscale}.csv"
+    filepath = str(Path(dirpath, filename))
+    df.to_csv(filepath)
 
 
 def plot(
@@ -174,7 +195,7 @@ def plot(
     x, y = np.array(x), np.array(y)
     dim = x.shape[-1]
     fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2)
-    fig.suptitle(f"Data from GP prior samples, $d={dim}$")
+    fig.suptitle(f"Data from GP prior samples, $d={dim}$, " + r"$\sigma^2=" + f"{noise}$")
 
     # ax3.scatter(x, y, s=5)
     # ax3.set_ylabel(r"$f(x) + \epsilon$, $\sigma^2 =" + f"{noise})$")
