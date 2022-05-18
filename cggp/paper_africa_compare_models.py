@@ -16,7 +16,7 @@ if __name__ == "__main__":
 
     as_tensor = True
     _, train_data, test_data = load_data("east_africa", as_tensor=as_tensor)
-    distance_type = "covariance"
+    distance_type = "euclidean"
     num_inducing_points = 2000
     num_iterations = 1000
     batch_size = 1000
@@ -26,7 +26,8 @@ if __name__ == "__main__":
     # use_jit = False
     use_tb = True
     logdir = "./logs-africa"
-    update_during_training = True
+    update_during_training = None
+    spatial_resolution = 0.005
     as_tensor = True
 
     _, train_data, test_data = load_data("east_africa", as_tensor=as_tensor)
@@ -44,7 +45,6 @@ if __name__ == "__main__":
     #     fn, train_data, num_inducing_points, use_jit=use_jit, distance_type=distance_type
     # )
 
-    spatial_resolution = 0.1
 
     def create_fn(cls_fn, trainable_inducing_points: bool = True):
         return create_model_and_covertree_update_fn(
