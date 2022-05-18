@@ -45,10 +45,6 @@ if __name__ == "__main__":
         noise_variance = likelihood.variance
         return gpflow.models.SGPR(train_data, kernel, iv, noise_variance=noise_variance)
 
-    # create_fn = lambda fn: create_model_and_kmeans_update_fn(
-    #     fn, train_data, num_inducing_points, use_jit=use_jit, distance_type=distance_type
-    # )
-
     def create_fn(cls_fn, trainable_inducing_points: bool = False):
         return create_model_and_covertree_update_fn(
             cls_fn,
