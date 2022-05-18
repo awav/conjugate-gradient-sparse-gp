@@ -309,12 +309,13 @@ class CGGP(ClusterGP):
 
         KmmLambdaInv_u = self.conjugate_gradient(KmmLambda, pseudo_u)
         KmmLambdaInv_Kmn = self.conjugate_gradient(KmmLambda, Kmn)
-        Knm_KmmLambdaInv_Kmn = tf.matmul(Kmn, KmmLambdaInv_Kmn, transpose_a=True)
 
         if not full_cov:
-            fvar = Knn - tf.linalg.diag_part(Knm_KmmLambdaInv_Kmn)
+            diag_Knm_KmmLambdaInv_Kmn = tf.reduce_sum(Kmn * KmmLambdaInv_Kmn, axis=0)     
+            fvar = Knn - diag_Knm_KmmLambdaInv_Kmn 
             fvar = fvar[:, None]
         else:
+            Knm_KmmLambdaInv_Kmn = tf.matmul(Kmn, KmmLambdaInv_Kmn, transpose_a=True)
             fvar = Knn - Knm_KmmLambdaInv_Kmn
             fvar = fvar[None, ...]
 
