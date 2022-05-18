@@ -13,6 +13,8 @@ if __name__ == "__main__":
     seed = 333
     np.random.seed(seed)
     tf.random.set_seed(seed)
+    gpflow.config.set_default_float(tf.float64)
+    gpflow.config.set_default_jitter(1e-5)
 
     as_tensor = True
     _, train_data, test_data = load_data("east_africa", as_tensor=as_tensor)
@@ -22,12 +24,13 @@ if __name__ == "__main__":
     batch_size = 1000
     monitor_batch_size = 2000
     learning_rate = 0.01
-    use_jit = True
-    # use_jit = False
+    # use_jit = True
+    use_jit = False
     use_tb = True
     logdir = "./logs-africa"
     update_during_training = None
-    spatial_resolution = 0.005
+    # spatial_resolution = 0.1  # Use in practice
+    spatial_resolution = 0.5
     as_tensor = True
 
     _, train_data, test_data = load_data("east_africa", as_tensor=as_tensor)
@@ -44,7 +47,6 @@ if __name__ == "__main__":
     # create_fn = lambda fn: create_model_and_kmeans_update_fn(
     #     fn, train_data, num_inducing_points, use_jit=use_jit, distance_type=distance_type
     # )
-
 
     def create_fn(cls_fn, trainable_inducing_points: bool = True):
         return create_model_and_covertree_update_fn(
@@ -74,26 +76,26 @@ if __name__ == "__main__":
     clustergp.cluster_counts.assign(cluster_counts)
     clustergp.pseudo_u.assign(means)
 
-    # SGPR
-    #
-    logdir_sgpr = f"{logdir}/sgpr"
-    monitor_sgpr = create_monitor(
-        sgpr,
-        train_data,
-        test_data,
-        monitor_batch_size,
-        use_tensorboard=use_tb,
-        logdir=logdir_sgpr,
-    )
-    train_using_lbfgs_and_update(
-        train_data,
-        sgpr,
-        num_iterations,
-        update_fn=None,
-        update_during_training=None,
-        monitor=monitor_sgpr,
-        use_jit=use_jit,
-    )
+    # # SGPR
+    # #
+    # logdir_sgpr = f"{logdir}/sgpr"
+    # monitor_sgpr = create_monitor(
+    #     sgpr,
+    #     train_data,
+    #     test_data,
+    #     monitor_batch_size,
+    #     use_tensorboard=use_tb,
+    #     logdir=logdir_sgpr,
+    # )
+    # train_using_lbfgs_and_update(
+    #     train_data,
+    #     sgpr,
+    #     num_iterations,
+    #     update_fn=None,
+    #     update_during_training=None,
+    #     monitor=monitor_sgpr,
+    #     use_jit=use_jit,
+    # )
 
     # CGGP
     #
