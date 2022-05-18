@@ -160,7 +160,7 @@ def train_using_lbfgs_and_update(
 
 def train_using_adam_and_update(
     data,
-    model: LpSVGP,
+    model: Union[gpflow.models.SGPR, LpSVGP],
     iterations: int,
     batch_size: int,
     learning_rate: float,
@@ -169,19 +169,21 @@ def train_using_adam_and_update(
     monitor: Optional[Monitor] = None,
     use_jit: bool = True,
 ):
-    n = data[0].shape[0]
-    dataset = transform_to_dataset(data, batch_size, shuffle=n)
-    data_iter = iter(dataset)
-
     update_during_training = update_during_training and (update_fn is not None)
 
     def internal_update_fn():
         if update_fn is not None:
             update_fn()
 
-    loss_fn = model.training_loss_closure(data_iter, compile=False)
-    variables = model.trainable_variables
+    if isinstance(model, gpflow.models.InternalDataTrainingLossMixin):
+        loss_fn = model.training_loss_closure(compile=False)
+    else:
+        n = data[0].shape[0]
+        dataset = transform_to_dataset(data, batch_size, shuffle=n)
+        data_iter = iter(dataset)
+        loss_fn = model.training_loss_closure(data_iter, compile=False)
 
+    variables = model.trainable_variables
     dtype = variables[0].dtype
     learning_rate = tf.convert_to_tensor(learning_rate, dtype=dtype)
     opt = tf.optimizers.Adam(learning_rate)

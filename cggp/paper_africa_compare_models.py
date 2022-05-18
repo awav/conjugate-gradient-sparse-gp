@@ -16,20 +16,18 @@ if __name__ == "__main__":
     gpflow.config.set_default_float(tf.float64)
     gpflow.config.set_default_jitter(1e-5)
 
-    as_tensor = True
-    _, train_data, test_data = load_data("east_africa", as_tensor=as_tensor)
     distance_type = "euclidean"
     num_inducing_points = 2000
     num_iterations = 1000
-    batch_size = 1000
-    monitor_batch_size = 2000
+    batch_size = 2000
+    monitor_batch_size = 3000
     learning_rate = 0.01
     # use_jit = True
     use_jit = False
     use_tb = True
     logdir = "./logs-africa"
     update_during_training = None
-    # spatial_resolution = 0.1  # Use in practice
+    # spatial_resolution = 0.07  # Use in practice
     spatial_resolution = 0.5
     as_tensor = True
 
@@ -48,7 +46,7 @@ if __name__ == "__main__":
     #     fn, train_data, num_inducing_points, use_jit=use_jit, distance_type=distance_type
     # )
 
-    def create_fn(cls_fn, trainable_inducing_points: bool = True):
+    def create_fn(cls_fn, trainable_inducing_points: bool = False):
         return create_model_and_covertree_update_fn(
             cls_fn,
             train_data,
@@ -64,6 +62,7 @@ if __name__ == "__main__":
     sgpr, _ = create_fn(sgpr_class)
 
     iv, means, cluster_counts = cggp_update_fn()
+    m = int(iv.shape[0])
 
     sgpr.inducing_variable.Z.assign(iv)
     lpsvgp.inducing_variable.Z.assign(iv)
@@ -76,17 +75,17 @@ if __name__ == "__main__":
     clustergp.cluster_counts.assign(cluster_counts)
     clustergp.pseudo_u.assign(means)
 
-    # # SGPR
-    # #
-    # logdir_sgpr = f"{logdir}/sgpr"
-    # monitor_sgpr = create_monitor(
-    #     sgpr,
-    #     train_data,
-    #     test_data,
-    #     monitor_batch_size,
-    #     use_tensorboard=use_tb,
-    #     logdir=logdir_sgpr,
-    # )
+    # SGPR
+    #
+    logdir_sgpr = f"{logdir}/sgpr-{m}"
+    monitor_sgpr = create_monitor(
+        sgpr,
+        train_data,
+        test_data,
+        monitor_batch_size,
+        use_tensorboard=use_tb,
+        logdir=logdir_sgpr,
+    )
     # train_using_lbfgs_and_update(
     #     train_data,
     #     sgpr,
@@ -96,10 +95,21 @@ if __name__ == "__main__":
     #     monitor=monitor_sgpr,
     #     use_jit=use_jit,
     # )
+    train_using_adam_and_update(
+        train_data,
+        sgpr,
+        num_iterations,
+        batch_size,
+        learning_rate,
+        update_fn=None,
+        update_during_training=None,
+        use_jit=use_jit,
+        monitor=monitor_sgpr,
+    )
 
     # CGGP
     #
-    logdir_cggp = f"{logdir}/cggp"
+    logdir_cggp = f"{logdir}/cggp-{m}"
     monitor_cggp = create_monitor(
         cggp,
         train_data,
@@ -120,50 +130,50 @@ if __name__ == "__main__":
         monitor=monitor_cggp,
     )
 
-    # ClusterGP
-    #
-    logdir_clustergp = f"{logdir}/clustergp"
-    monitor_clustergp = create_monitor(
-        clustergp,
-        train_data,
-        test_data,
-        monitor_batch_size,
-        use_tensorboard=use_tb,
-        logdir=logdir_clustergp,
-    )
-    train_using_adam_and_update(
-        train_data,
-        clustergp,
-        num_iterations,
-        batch_size,
-        learning_rate,
-        update_fn=clustergp_update_fn,
-        update_during_training=update_during_training,
-        use_jit=use_jit,
-        monitor=monitor_clustergp,
-    )
+    # # ClusterGP
+    # #
+    # logdir_clustergp = f"{logdir}/clustergp"
+    # monitor_clustergp = create_monitor(
+    #     clustergp,
+    #     train_data,
+    #     test_data,
+    #     monitor_batch_size,
+    #     use_tensorboard=use_tb,
+    #     logdir=logdir_clustergp,
+    # )
+    # train_using_adam_and_update(
+    #     train_data,
+    #     clustergp,
+    #     num_iterations,
+    #     batch_size,
+    #     learning_rate,
+    #     update_fn=clustergp_update_fn,
+    #     update_during_training=update_during_training,
+    #     use_jit=use_jit,
+    #     monitor=monitor_clustergp,
+    # )
 
-    # LpSVGP
-    #
-    logdir_lpsvgp = f"{logdir}/lpsvgp"
-    monitor_lpsvgp = create_monitor(
-        lpsvgp,
-        train_data,
-        test_data,
-        monitor_batch_size,
-        use_tensorboard=use_tb,
-        logdir=logdir_lpsvgp,
-    )
-    train_using_adam_and_update(
-        train_data,
-        lpsvgp,
-        num_iterations,
-        batch_size,
-        learning_rate,
-        update_fn=None,
-        update_during_training=update_during_training,
-        use_jit=use_jit,
-        monitor=monitor_lpsvgp,
-    )
+    # # LpSVGP
+    # #
+    # logdir_lpsvgp = f"{logdir}/lpsvgp"
+    # monitor_lpsvgp = create_monitor(
+    #     lpsvgp,
+    #     train_data,
+    #     test_data,
+    #     monitor_batch_size,
+    #     use_tensorboard=use_tb,
+    #     logdir=logdir_lpsvgp,
+    # )
+    # train_using_adam_and_update(
+    #     train_data,
+    #     lpsvgp,
+    #     num_iterations,
+    #     batch_size,
+    #     learning_rate,
+    #     update_fn=None,
+    #     update_during_training=update_during_training,
+    #     use_jit=use_jit,
+    #     monitor=monitor_lpsvgp,
+    # )
 
     print(f"End. Check tensorboard logdir {logdir}")
