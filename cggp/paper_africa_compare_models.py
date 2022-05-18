@@ -4,6 +4,9 @@ from data import load_data
 import tensorflow as tf
 import numpy as np
 import gpflow
+from gpflow.utilities import parameter_dict
+from utils import store_logs, to_numpy
+from pathlib import Path
 
 from cli_utils import create_model_and_kmeans_update_fn, create_model_and_covertree_update_fn
 from optimize import train_using_adam_and_update, train_using_lbfgs_and_update, create_monitor
@@ -13,7 +16,7 @@ if __name__ == "__main__":
     seed = 333
     np.random.seed(seed)
     tf.random.set_seed(seed)
-    gpflow.config.set_default_float(tf.float64)
+    gpflow.config.set_default_float(tf.float32)
     gpflow.config.set_default_jitter(1e-5)
 
     distance_type = "euclidean"
@@ -22,13 +25,13 @@ if __name__ == "__main__":
     batch_size = 2000
     monitor_batch_size = 3000
     learning_rate = 0.01
-    # use_jit = True
-    use_jit = False
+    use_jit = True
+    # use_jit = False
     use_tb = True
     logdir = "./logs-africa"
     update_during_training = None
-    # spatial_resolution = 0.07  # Use in practice
-    spatial_resolution = 0.5
+    spatial_resolution = 0.07  # Use in practice
+    # spatial_resolution = 0.5
     as_tensor = True
 
     _, train_data, test_data = load_data("east_africa", as_tensor=as_tensor)
@@ -106,7 +109,13 @@ if __name__ == "__main__":
         use_jit=use_jit,
         monitor=monitor_sgpr,
     )
-
+    sgpr_params = parameter_dict(sgpr)
+    sgpr_params_np = to_numpy(sgpr_params)
+    store_logs(Path(logdir_sgpr, "params.npy"), sgpr_params_np)
+    sgpr_mean_train, _ = sgpr.predict_f(train_data[0])
+    sgpr_mean_test, _ = sgpr.predict_f(test_data[0])
+    store_logs(Path(logdir_sgpr, "train_mean.npy"), np.array(sgpr_mean_train))
+    store_logs(Path(logdir_sgpr, "test_mean.npy"), np.array(sgpr_mean_test))
     # CGGP
     #
     logdir_cggp = f"{logdir}/cggp-{m}"
@@ -129,7 +138,13 @@ if __name__ == "__main__":
         use_jit=use_jit,
         monitor=monitor_cggp,
     )
-
+    cggp_params = parameter_dict(cggp)
+    cggp_params_np = to_numpy(cggp_params)
+    store_logs(Path(logdir_cggp, "params.npy"), cggp_params_np)
+    cggp_mean_train, _ = cggp.predict_f(train_data[0])
+    cggp_mean_test, _ = cggp.predict_f(test_data[0])
+    store_logs(Path(logdir_cggp, "train_mean.npy"), np.array(cggp_mean_train))
+    store_logs(Path(logdir_cggp, "test_mean.npy"), np.array(cggp_mean_test))
     # # ClusterGP
     # #
     # logdir_clustergp = f"{logdir}/clustergp"
