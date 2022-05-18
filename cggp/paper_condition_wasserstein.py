@@ -5,12 +5,15 @@ import tensorflow as tf
 import gpflow
 
 from distance import DistanceType
-from conjugate_gradient import ConjugateGradient
+from conjugate_gradient import ConjugateGradient, conjugate_gradient
 from models import ClusterGP, CGGP
 from cli_utils import create_model_and_covertree_update_fn, kernel_fn
 from utils import add_diagonal, jit
 
 import matplotlib.pyplot as plt
+
+
+Tensor = tf.Tensor
 
 
 def gen_data(seed: Optional[int] = None, noise: float = 0.001):
@@ -82,6 +85,7 @@ def gen_wasserstein_condition_numbers(
     condition_numbers = []
     num_inducing_points = []
     wasserstein_distances = []
+    cg_iterations = []
 
     for resolution in resolutions:
         model_and_update_fn: Tuple[ClusterGP, Callable] = covertree_setup(resolution)
@@ -95,9 +99,13 @@ def gen_wasserstein_condition_numbers(
         diag_lambda = model.diag_variance[..., 0]
         num_inducing = np.array(iv.num_inducing)
         num_inducing_points.append(num_inducing)
+        u = model.pseudo_u
 
         kuu = gpflow.covariances.Kuu(iv, kernel, jitter=0.0)
         kuu_lambda = add_diagonal(kuu, diag_lambda)
+
+        cg = model.conjugate_gradient
+        _, cg_stats = stats_conjugate_gradient(cg, kuu_lambda, u)
 
         eigvals = tf.linalg.eigvalsh(kuu_lambda).numpy()
         eig_min = eigvals.min()
@@ -110,8 +118,9 @@ def gen_wasserstein_condition_numbers(
         model_moments = (mu_approx, cov_approx[0])
         distance = wasserstein2(gpr_moments, model_moments)
         wasserstein_distances.append(distance)
+        cg_iterations.append(np.array(cg_stats[0]))
 
-    return condition_numbers, num_inducing_points, wasserstein_distances
+    return condition_numbers, num_inducing_points, wasserstein_distances, cg_iterations
 
 
 def sample_gpr_prior(kernel, inputs, num_samples: int = 1):
@@ -129,7 +138,7 @@ def sample_gpr_prior(kernel, inputs, num_samples: int = 1):
 
 
 def paper_visualization():
-    seed = 999
+    seed = 333
     tf.random.set_seed(seed)
     np.random.seed(seed)
 
@@ -170,11 +179,13 @@ def paper_visualization():
                 condition_numbers,
                 num_inducing_points,
                 wasserstein_distances,
+                cg_iterations,
             ) = metrics
 
             data_frame[f"condition_numbers_dim{dim}_s{s}"] = np.array(condition_numbers)
             data_frame[f"num_inducing_points_{dim}_{s}"] = np.array(num_inducing_points)
             data_frame[f"wasserstein_distances_{dim}_{s}"] = np.array(wasserstein_distances)
+            data_frame[f"cg_iterations_{dim}_{s}"] = np.array(cg_iterations)
 
             # plot(data, noise, resolutions, *metrics)
 
@@ -229,6 +240,41 @@ def plot(
     plt.tight_layout()
     plt.show()
     print()
+
+
+def stats_conjugate_gradient(
+    cg: ConjugateGradient, matrix: Tensor, rhs: Tensor, initial_solution: Optional[Tensor] = None
+) -> Tensor:
+    rhs = tf.transpose(rhs)
+
+    if initial_solution is None:
+        initial_solution = tf.zeros_like(rhs)
+    else:
+        initial_solution = tf.transpose(initial_solution)
+
+    max_iterations = cg.max_iterations
+    if max_iterations is None:
+        max_iterations = tf.shape(matrix)[-1]
+
+    max_steps_cycle = cg.max_steps_cycle
+    if max_steps_cycle is None:
+        max_steps_cycle = max_iterations + 1  # Make sure that we don't run it in the end of CG
+
+    preconditioner = cg.preconditioner
+    error_threshold = cg.error_threshold
+
+    solution, stats = conjugate_gradient(
+        matrix,
+        rhs,
+        initial_solution,
+        error_threshold,
+        preconditioner=preconditioner,
+        max_iterations=max_iterations,
+        max_steps_cycle=max_steps_cycle,
+    )
+
+    solution = tf.transpose(solution)
+    return solution, stats
 
 
 if __name__ == "__main__":
