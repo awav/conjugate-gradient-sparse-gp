@@ -143,8 +143,8 @@ def paper_visualization():
     n = 1000
     b = 5
     # dims = [1, 2, 4, 8]
-    dims = [1, 2]
-    num_samples = 1
+    dims = [1, 2, 4, 8]
+    num_samples = 5
     data_frame = {"resolutions": resolutions}
 
     for dim in dims:
@@ -170,11 +170,11 @@ def paper_visualization():
                 wasserstein_distances,
             ) = metrics
 
-            data_frame[f"condition_numbers_{dim}_{s}"] = np.array(condition_numbers)
+            data_frame[f"condition_numbers_dim{dim}_s{s}"] = np.array(condition_numbers)
             data_frame[f"num_inducing_points_{dim}_{s}"] = np.array(num_inducing_points)
             data_frame[f"wasserstein_distances_{dim}_{s}"] = np.array(wasserstein_distances)
 
-            plot(data, noise, resolutions, *metrics)
+            # plot(data, noise, resolutions, *metrics)
 
     dirpath = str(Path(Path(__file__).parent))
     store_metrics(dirpath, noise, lengthscale, data_frame)
