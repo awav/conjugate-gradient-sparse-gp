@@ -148,6 +148,7 @@ def paper_visualization():
     data_frame = {"resolutions": resolutions}
 
     for dim in dims:
+        print(f">>> Start processing dim = {dim}")
         rng = np.random.RandomState(seed)
         lengthscales = [lengthscale * np.sqrt(dim)] * dim
         x = rng.rand(n, dim) * 2 * b - b
@@ -157,6 +158,7 @@ def paper_visualization():
 
         yt = sample_gpr_prior(kernel, xt, num_samples=num_samples)
         for s in range(num_samples):
+            print(f">>> Start processing sample = {s}")
             data = (xt, yt[s])
             gpr = gpflow.models.GPR(data, kernel, noise_variance=noise)
 

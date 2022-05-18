@@ -25,6 +25,11 @@ def covertree_update_inducing_parameters(
     new_iv = covertree.centroids
     means, counts = covertree.cluster_mean_and_counts
 
+    filter_empty_clusters = tf.reshape(counts != 0.0, -1)
+    new_iv = tf.boolean_mask(new_iv, filter_empty_clusters)
+    means = tf.boolean_mask(means, filter_empty_clusters)
+    counts = tf.boolean_mask(counts, filter_empty_clusters)
+
     model.inducing_variable.Z.assign(new_iv)
     model.pseudo_u.assign(means)
     model.cluster_counts.assign(counts)
