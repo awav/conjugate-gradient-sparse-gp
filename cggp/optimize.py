@@ -25,6 +25,11 @@ def covertree_update_inducing_parameters(
     new_iv = covertree.centroids
     means, counts = covertree.cluster_mean_and_counts
 
+    filter_empty_clusters = tf.reshape(counts != 0.0, -1)
+    new_iv = tf.boolean_mask(new_iv, filter_empty_clusters)
+    means = tf.boolean_mask(means, filter_empty_clusters)
+    counts = tf.boolean_mask(counts, filter_empty_clusters)
+
     model.inducing_variable.Z.assign(new_iv)
     model.pseudo_u.assign(means)
     model.cluster_counts.assign(counts)
@@ -48,7 +53,6 @@ def kmeans_update_inducing_parameters(
     u_init = tf.zeros([m, 1], dtype=new_iv.dtype)
     update_indices = tf.reshape(indices, [-1, 1])
     u = tf.tensor_scatter_nd_add(u_init, update_indices, y) / counts
-    sigma2 = model.likelihood.variance
 
     model.inducing_variable.Z.assign(new_iv)
     model.pseudo_u.assign(u)
@@ -111,35 +115,52 @@ def train_vanilla_using_lbfgs(
 
 def train_using_lbfgs_and_update(
     data,
-    model: ClusterGP,
-    update_fn: Callable,
+    model: Union[ClusterGP, gpflow.models.SGPR],
     max_num_iters: int,
+    update_fn: Optional[Callable] = None,
+    update_during_training: Optional[int] = None,
+    monitor: Optional[Monitor] = None,
     use_jit: bool = True,
 ):
     lbfgs = gpflow.optimizers.Scipy()
     options = dict(maxiter=max_num_iters)
-    loss_fn = model.training_loss_closure(data, compile=False)
+
+    if isinstance(model, gpflow.models.InternalDataTrainingLossMixin):
+        loss_fn = model.training_loss_closure(compile=False)
+    else:
+        loss_fn = model.training_loss_closure(data, compile=False)
+
     variables = model.trainable_variables
 
-    gpflow.utilities.set_trainable(model.inducing_variable, False)
+    def internal_update_fn(iteration: int, *args, **kwargs):
+        if update_during_training and (update_fn is not None):
+            update_fn()
+        if monitor is not None:
+            monitor(iteration)
 
-    # for _ in range(outer_num_iters):
-    update_fn()
+    internal_update_fn(0)
+
     if max_num_iters > 0:
         result = lbfgs.minimize(
             loss_fn,
             variables,
-            step_callback=update_fn,
+            step_callback=internal_update_fn,
             compile=use_jit,
             options=options,
         )
         return result
+
+    internal_update_fn(-1)
+
+    if monitor is not None:
+        monitor.close()
+
     return None
 
 
 def train_using_adam_and_update(
     data,
-    model: LpSVGP,
+    model: Union[gpflow.models.SGPR, LpSVGP],
     iterations: int,
     batch_size: int,
     learning_rate: float,
@@ -148,19 +169,21 @@ def train_using_adam_and_update(
     monitor: Optional[Monitor] = None,
     use_jit: bool = True,
 ):
-    n = data[0].shape[0]
-    dataset = transform_to_dataset(data, batch_size, shuffle=n)
-    data_iter = iter(dataset)
-
     update_during_training = update_during_training and (update_fn is not None)
 
     def internal_update_fn():
         if update_fn is not None:
             update_fn()
 
-    loss_fn = model.training_loss_closure(data_iter, compile=False)
-    variables = model.trainable_variables
+    if isinstance(model, gpflow.models.InternalDataTrainingLossMixin):
+        loss_fn = model.training_loss_closure(compile=False)
+    else:
+        n = data[0].shape[0]
+        dataset = transform_to_dataset(data, batch_size, shuffle=n)
+        data_iter = iter(dataset)
+        loss_fn = model.training_loss_closure(data_iter, compile=False)
 
+    variables = model.trainable_variables
     dtype = variables[0].dtype
     learning_rate = tf.convert_to_tensor(learning_rate, dtype=dtype)
     opt = tf.optimizers.Adam(learning_rate)
@@ -239,8 +262,12 @@ def make_metrics_callback(model, train_data, test_data, batch_size: int, use_jit
         return error, lpd
 
     @jit(use_jit)
-    def train_metrics_fn(data):
+    def train_metrics_batch_fn(data):
         return model.elbo(data)
+
+    @jit(use_jit)
+    def train_metrics_full_fn():
+        return model.elbo()
 
     def step_callback(step, *args, **kwargs):
         error = np.array([]).reshape(-1, 1)
@@ -252,9 +279,12 @@ def make_metrics_callback(model, train_data, test_data, batch_size: int, use_jit
             lpd += batch_log_density.numpy()
             error = np.concatenate([error, batch_error.numpy()], axis=0)
 
-        for batch in train_dataset:
-            batch_elbo = train_metrics_fn(batch)
-            elbo += batch_elbo.numpy()
+        if isinstance(model, gpflow.models.InternalDataTrainingLossMixin):
+            elbo = train_metrics_full_fn().numpy()
+        else:
+            for batch in train_dataset:
+                batch_elbo = train_metrics_batch_fn(batch)
+                elbo += batch_elbo.numpy()
 
         rmse = np.sqrt(np.mean(error**2))
         nlpd = -lpd

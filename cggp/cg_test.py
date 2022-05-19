@@ -60,7 +60,6 @@ def test_log_determinant_grad(dimension, num_inputs, num_systems, max_error, ker
 
     logdet_grad = t.gradient(logdet, kernel.trainable_variables)
     logdet_grad_cg = t.gradient(logdet_cg, kernel.trainable_variables)
-    
     np.testing.assert_allclose(0, logdet_cg, rtol=1e-3, atol=1e-4)
 
     for g1, g2 in zip(logdet_grad, logdet_grad_cg):

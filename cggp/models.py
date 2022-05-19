@@ -1,10 +1,9 @@
-from email.policy import default
 from typing import Tuple
-from xml.sax.handler import property_declaration_handler
 import numpy as np
 import tensorflow as tf
 import gpflow
 from tensorflow_probability import distributions as tfd
+from tensorflow_probability import random as tfpr
 from numpy import newaxis
 from gpflow import Parameter
 from gpflow.utilities import positive
@@ -19,17 +18,29 @@ Tensor = tf.Tensor
 Moments = Tuple[Tensor, Tensor]
 
 
-def eval_logdet(matrix, cg):
+def eval_logdet(matrix, cg, num_probes=None):
+    """
+    If num_probes is None solve against identity, else use a Rademacher based trace estimator
+    """
     @tf.custom_gradient
     def _eval_logdet(matrix):
         dtype = matrix.dtype
 
         def grad_logdet(df: Tensor) -> Tensor:
             n = tf.shape(matrix)[-1]
-            eye = tf.linalg.eye(n, dtype=dtype)
-            KmmLambdaInv = cg(matrix, eye)
-            KmmLambdaInv = tf.transpose(KmmLambdaInv)
-            return df * KmmLambdaInv
+            if num_probes is None:
+                eye = tf.linalg.eye(n, dtype=dtype)
+                KmmLambdaInv = cg(matrix, eye)
+                KmmLambdaInv = tf.transpose(KmmLambdaInv)
+                return df * KmmLambdaInv
+            else:
+                shape = (n, num_probes) 
+                probes = tfpr.rademacher(shape, dtype=dtype)
+                rv = df * probes # valid since logdet is a scalar
+                lv = cg(matrix, probes)
+                mat = tf.matmul(lv, rv, transpose_b=True) / tf.cast(num_probes, dtype=dtype)
+                # mat = 0.5 * (mat + tf.transpose(mat)) # symmetrize?
+                return mat
 
         return tf.constant(0.0, dtype=dtype), grad_logdet
 
@@ -266,10 +277,11 @@ class ClusterGP(LpSVGP):
 
 class CGGP(ClusterGP):
     def __init__(
-        self, kernel, likelihood, inducing_variable, conjugate_gradient: ConjugateGradient, **kwargs
+        self, kernel, likelihood, inducing_variable, conjugate_gradient: ConjugateGradient, num_probes: int= None, **kwargs
     ):
         super().__init__(kernel, likelihood, inducing_variable, **kwargs)
         self.conjugate_gradient = conjugate_gradient
+        self.num_probes = num_probes
 
     def prior_kl(self) -> Tensor:
         kernel = self.kernel
@@ -282,13 +294,23 @@ class CGGP(ClusterGP):
         KmmLambda = add_diagonal(Kmm, var[:, 0])
 
         KmmLambdaInv_u = self.conjugate_gradient(KmmLambda, pseudo_u)
-        KmmLambdaInv_Kmm = self.conjugate_gradient(KmmLambda, Kmm)
+        if self.num_probes is None:
+            KmmLambdaInv_Kmm = self.conjugate_gradient(KmmLambda, Kmm)
+            trace = tf.linalg.trace(KmmLambdaInv_Kmm)
+        else:
+            n = tf.shape(KmmLambda)[0]
+            shape = (n, self.num_probes) 
+            probes = tfpr.rademacher(shape, dtype=KmmLambda.dtype)
+            KmmLambdaInv_probes = self.conjugate_gradient(KmmLambda, probes)
+            Kmmprobes = tf.matmul(Kmm, probes) 
+            trace_scaled = tf.reduce_sum(KmmLambdaInv_probes * Kmmprobes)
+            trace = trace_scaled / tf.cast(self.num_probes, dtype = trace_scaled.dtype)
 
         quad_Kmm_KmmLambdaInv_u = tf.matmul(Kmm, KmmLambdaInv_u) * KmmLambdaInv_u
         quad = tf.reduce_sum(quad_Kmm_KmmLambdaInv_u)
 
-        logdet = eval_logdet(KmmLambda, self.conjugate_gradient)
-        trace = tf.linalg.trace(KmmLambdaInv_Kmm)
+        logdet = eval_logdet(KmmLambda, self.conjugate_gradient, num_probes=self.num_probes)
+        
         const = tf.reduce_sum(tf.math.log(var))
         return 0.5 * (quad - trace + logdet - const)
 

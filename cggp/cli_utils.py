@@ -116,6 +116,7 @@ def create_model_and_kmeans_update_fn(
     num_inducing_points: int,
     use_jit: bool = True,
     distance_type: DistanceType = "covariance",
+    trainable_inducing_points: bool = False,
 ):
     model = create_model(
         model_class,
@@ -132,7 +133,7 @@ def create_model_and_kmeans_update_fn(
         distance_type=distance_type,
     )
 
-    gpflow.utilities.set_trainable(model.inducing_variable, False)
+    gpflow.utilities.set_trainable(model.inducing_variable, trainable_inducing_points)
     return model, update_fn
 
 
@@ -142,6 +143,7 @@ def create_model_and_covertree_update_fn(
     spatial_resolution: float,
     use_jit: bool = True,
     distance_type: DistanceType = "covariance",
+    trainable_inducing_points: bool = False,
 ):
     model = create_model(model_class, kernel_fn, data)
     update_fn = create_update_fn(
@@ -153,5 +155,5 @@ def create_model_and_covertree_update_fn(
         distance_type=distance_type,
     )
 
-    gpflow.utilities.set_trainable(model.inducing_variable, False)
+    gpflow.utilities.set_trainable(model.inducing_variable, trainable_inducing_points)
     return model, update_fn
