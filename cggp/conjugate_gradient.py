@@ -57,7 +57,8 @@ def conjugate_gradient(
         """
 
         def stopping_condition(state):
-            over_threshold = tf.reduce_any(0.5 * state.rz > error_threshold)
+            norm_r_sq = tf.reduce_sum(tf.square(state.r), axis=-1, keepdims=True)
+            over_threshold = tf.reduce_any(0.5 * norm_r_sq > error_threshold)
             return tf.logical_and(over_threshold, (state.i < max_iterations))
 
         def cg_step(state, b):
@@ -73,7 +74,7 @@ def conjugate_gradient(
                 lambda: b - v @ A,
                 lambda: state.r - gamma * pA,
             )
-            z, new_rz = preconditioner(r)
+            z, new_rz = preconditioner(r, A)
             z_update = state.p * new_rz / state.rz
             z_update = tf.where(state.rz <= min_float, zero, z_update)
             p = tf.cond(
@@ -85,7 +86,7 @@ def conjugate_gradient(
 
         vA = v @ A
         r = b - vA
-        z, rz = preconditioner(r)
+        z, rz = preconditioner(r, A)
         p = z
         i = tf.convert_to_tensor(0, dtype=tf.int32)
         initial_state = CGState(i, v, r, p, rz)
@@ -105,7 +106,7 @@ def conjugate_gradient(
             grad_v = tf.zeros_like(dx)
             grad_vA = grad_v @ A
             grad_r = dx - grad_vA
-            grad_z, grad_rz = preconditioner(grad_r)
+            grad_z, grad_rz = preconditioner(grad_r, A)
             grad_p = grad_z
             grad_i = tf.convert_to_tensor(0, dtype=tf.int32)
             grad_initial_state = CGState(grad_i, grad_v, grad_r, grad_p, grad_rz)
@@ -123,15 +124,30 @@ def conjugate_gradient(
 
 class CGPreconditioner:
     @abc.abstractmethod
-    def __call__(self, vec: Tensor) -> Tuple[Tensor, Tensor]:
+    def __call__(self, vec: Tensor, mat: Tensor) -> Tuple[Tensor, Tensor]:
         raise NotImplementedError
 
 
 class EyePreconditioner(CGPreconditioner):
     @abc.abstractmethod
-    def __call__(self, vec: Tensor) -> Tuple[Tensor, Tensor]:
+    def __call__(self, vec: Tensor, mat: Tensor) -> Tuple[Tensor, Tensor]:
         return vec, tf.reduce_sum(tf.square(vec), axis=-1, keepdims=True)
 
+class BlockPreconditioner(CGPreconditioner):
+    def __init__(self, block_indices) -> None:
+        super().__init__()
+        self.block_indices = block_indices
+    
+    def __call__(self, vec: Tensor, mat: Tensor) -> Tuple[Tensor, Tensor]:
+        def cholesky_solve_linear_system(indices: Tensor):
+            b = tf.gather(vec, indices)
+            A_indices = tf.concat((indices[:,None,None] + tf.zeros_like(indices[None,:,None]), indices[None,:,None] + tf.zeros_like(indices[:,None,None])), axis=2)
+            A = tf.gather_nd(mat, A_indices)
+            L = tf.linalg.cholesky(A)
+            return tf.linalg.cholesky_solve(L,b)
+        
+        new_vec = tf.vectorized_map(cholesky_solve_linear_system, self.block_indices)
+        return new_vec, tf.reduce_sum(new_vec * vec, axis=-1, keepdims=True)
 
 class ConjugateGradient:
     preconditioner: CGPreconditioner
