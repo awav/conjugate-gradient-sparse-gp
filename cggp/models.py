@@ -36,10 +36,7 @@ def eval_logdet(matrix, cg, num_probes=None):
             else:
                 shape = (n, num_probes) 
                 probes = tfpr.rademacher(shape, dtype=dtype)
-                if tf.rank(df) == 0:
-                    rv = df * probes
-                else:
-                    rv = tf.matmul(df, probes, transpose_b=True)
+                rv = df * probes # valid since logdet is a scalar
                 lv = cg(matrix, probes)
                 mat = tf.matmul(lv, rv, transpose_b=True) / tf.cast(num_probes, dtype=dtype)
                 # mat = 0.5 * (mat + tf.transpose(mat)) # symmetrize?
