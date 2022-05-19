@@ -90,7 +90,7 @@ def norm_dataset(data: Dataset) -> Dataset:
     return norm(data[0]), norm(data[1])
 
 
-def load_data(name: str, as_tensor: bool = False) -> DatasetBundle:
+def load_data(name: str, as_tensor: bool = False, normalise: bool = True) -> DatasetBundle:
     if name == "snelson1d":
         train, test = snelson1d("~/.dataset/snelson1d/")
     elif name == "east_africa":
@@ -103,10 +103,13 @@ def load_data(name: str, as_tensor: bool = False) -> DatasetBundle:
         dat = getattr(bbd, uci_name)(prop=0.67)
         train, test = (dat.X_train, dat.Y_train), (dat.X_test, dat.Y_test)
 
-    (x_train, x_mu, x_std), (y_train, y_mu, y_std) = norm_dataset(train)
-    x_test = (test[0] - x_mu) / x_std
-    y_test = (test[1] - y_mu) / y_std
-
+    if normalise:
+        (x_train, x_mu, x_std), (y_train, y_mu, y_std) = norm_dataset(train)
+        x_test = (test[0] - x_mu) / x_std
+        y_test = (test[1] - y_mu) / y_std
+    else:
+        x_train, y_train = train
+        x_test, y_test = test
     x_train = _to_float(x_train, as_tensor=as_tensor)
     y_train = _to_float(y_train, as_tensor=as_tensor)
     x_test = _to_float(x_test, as_tensor=as_tensor)
