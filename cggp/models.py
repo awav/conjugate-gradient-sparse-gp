@@ -42,7 +42,7 @@ def eval_logdet(matrix, cg, num_probes=None):
                     rv = tf.matmul(df, probes, transpose_b=True)
                 lv = cg(matrix, probes)
                 mat = tf.matmul(lv, rv, transpose_b=True) / tf.cast(num_probes, dtype=dtype)
-                mat = 0.5 * (mat + tf.transpose(mat)) # symmetrize, because this is weird.
+                # mat = 0.5 * (mat + tf.transpose(mat)) # symmetrize?
                 return mat
 
         return tf.constant(0.0, dtype=dtype), grad_logdet
