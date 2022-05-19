@@ -300,7 +300,7 @@ class CGGP(ClusterGP):
         n = tf.shape(KmmLambda)[0]
         shape = (n, self.num_probes) 
         probes = tfpr.rademacher(shape, dtype=KmmLambda.dtype)
-        KmmLambdaInv_probes = self.conjugate_gradient(KmmLambda, pseudo_u)
+        KmmLambdaInv_probes = self.conjugate_gradient(KmmLambda, probes)
         Kmmprobes = tf.matmul(Kmm, probes)
         # KmmLambdaInv_Kmm = self.conjugate_gradient(KmmLambda, Kmm)
 
