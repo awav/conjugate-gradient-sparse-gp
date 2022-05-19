@@ -5,11 +5,35 @@ import tensorflow as tf
 import numpy as np
 import gpflow
 from gpflow.utilities import parameter_dict
-from utils import store_logs, to_numpy
+from utils import store_logs, to_numpy, jit
 from pathlib import Path
 
 from cli_utils import create_model_and_kmeans_update_fn, create_model_and_covertree_update_fn
-from optimize import train_using_adam_and_update, train_using_lbfgs_and_update, create_monitor
+from optimize import (
+    train_using_adam_and_update,
+    train_using_lbfgs_and_update,
+    create_monitor,
+    transform_to_dataset,
+)
+
+
+def create_predict_fn(model, use_jit: bool = True):
+    @jit(use_jit)
+    def predict_fn(inputs):
+        mu, _ = model.predict_f(inputs)
+        return mu
+
+    return predict_fn
+
+
+def batch_posterior_computation(predict_fn, data, batch_size):
+    data = transform_to_dataset(data, repeat=False, batch_size=batch_size)
+    means = []
+    for (x, y) in data:
+        mean = predict_fn(x)
+        means.append(mean.numpy())
+    means = np.concatenate(means, axis=0)
+    return means
 
 
 if __name__ == "__main__":
@@ -23,7 +47,7 @@ if __name__ == "__main__":
     num_inducing_points = 2000
     num_iterations = 1000
     batch_size = 2000
-    monitor_batch_size = 3000
+    monitor_batch_size = 4000
     learning_rate = 0.01
     use_jit = True
     # use_jit = False
@@ -85,15 +109,6 @@ if __name__ == "__main__":
         use_tensorboard=use_tb,
         logdir=logdir_sgpr,
     )
-    # train_using_lbfgs_and_update(
-    #     train_data,
-    #     sgpr,
-    #     num_iterations,
-    #     update_fn=None,
-    #     update_during_training=None,
-    #     monitor=monitor_sgpr,
-    #     use_jit=use_jit,
-    # )
     train_using_adam_and_update(
         train_data,
         sgpr,
@@ -108,8 +123,11 @@ if __name__ == "__main__":
     sgpr_params = parameter_dict(sgpr)
     sgpr_params_np = to_numpy(sgpr_params)
     store_logs(Path(logdir_sgpr, "params.npy"), sgpr_params_np)
-    sgpr_mean_train, _ = sgpr.predict_f(train_data[0])
-    sgpr_mean_test, _ = sgpr.predict_f(test_data[0])
+
+    sgpr_predict_fn = create_predict_fn(sgpr, use_jit=use_jit)
+    sgpr_mean_train = batch_posterior_computation(sgpr_predict_fn, train_data, monitor_batch_size)
+    sgpr_mean_test = batch_posterior_computation(sgpr_predict_fn, test_data, monitor_batch_size)
+
     store_logs(Path(logdir_sgpr, "train_mean.npy"), np.array(sgpr_mean_train))
     store_logs(Path(logdir_sgpr, "test_mean.npy"), np.array(sgpr_mean_test))
     # CGGP
@@ -137,8 +155,11 @@ if __name__ == "__main__":
     cggp_params = parameter_dict(cggp)
     cggp_params_np = to_numpy(cggp_params)
     store_logs(Path(logdir_cggp, "params.npy"), cggp_params_np)
-    cggp_mean_train, _ = cggp.predict_f(train_data[0])
-    cggp_mean_test, _ = cggp.predict_f(test_data[0])
+
+    cggp_predict_fn = create_predict_fn(cggp, use_jit=use_jit)
+    cggp_mean_train = batch_posterior_computation(cggp_predict_fn, train_data, monitor_batch_size)
+    cggp_mean_test = batch_posterior_computation(cggp_predict_fn, test_data, monitor_batch_size)
+
     store_logs(Path(logdir_cggp, "train_mean.npy"), np.array(cggp_mean_train))
     store_logs(Path(logdir_cggp, "test_mean.npy"), np.array(cggp_mean_test))
     # # ClusterGP
