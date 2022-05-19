@@ -297,13 +297,20 @@ class CGGP(ClusterGP):
         KmmLambda = add_diagonal(Kmm, var[:, 0])
 
         KmmLambdaInv_u = self.conjugate_gradient(KmmLambda, pseudo_u)
-        KmmLambdaInv_Kmm = self.conjugate_gradient(KmmLambda, Kmm)
+        n = tf.shape(KmmLambda)[0]
+        shape = (n, self.num_probes) 
+        probes = tfpr.rademacher(shape, dtype=KmmLambda.dtype)
+        KmmLambdaInv_probes = self.conjugate_gradient(KmmLambda, pseudo_u)
+        Kmmprobes = tf.matmul(Kmm, probes)
+        # KmmLambdaInv_Kmm = self.conjugate_gradient(KmmLambda, Kmm)
 
         quad_Kmm_KmmLambdaInv_u = tf.matmul(Kmm, KmmLambdaInv_u) * KmmLambdaInv_u
         quad = tf.reduce_sum(quad_Kmm_KmmLambdaInv_u)
 
         logdet = eval_logdet(KmmLambda, self.conjugate_gradient, num_probes=self.num_probes)
-        trace = tf.linalg.trace(KmmLambdaInv_Kmm)
+        # trace = tf.linalg.trace(KmmLambdaInv_Kmm)
+        trace_scaled = tf.reduce_sum(KmmLambdaInv_probes * Kmmprobes)
+        trace = trace_scaled / tf.cast(self.num_probes, dtype = trace_scaled.dtype)
         const = tf.reduce_sum(tf.math.log(var))
         return 0.5 * (quad - trace + logdet - const)
 
