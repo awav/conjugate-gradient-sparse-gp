@@ -14,7 +14,13 @@ import tensorflow as tf
 from gpflow.kernels import Matern32, SquaredExponential
 
 from distance import DistanceType
-from cli_utils import create_model, create_update_fn, ClusteringType
+from cli_utils import (
+    create_model,
+    create_update_fn,
+    KernelType,
+    DatasetType,
+    LogdirPath,
+)
 from data import load_data, DatasetBundle
 from optimize import train_using_adam_and_update, create_monitor
 from models import CGGP, LpSVGP, ClusterGP
@@ -22,77 +28,8 @@ from conjugate_gradient import ConjugateGradient
 
 
 Tensor = tf.Tensor
-__default_logdir = "./logs-default"
-
-
-class LogdirPath(click.Path):
-    def __init__(self, mkdir: bool = True, **kwargs):
-        super().__init__(**kwargs)
-        self.mkdir = mkdir
-
-    def convert(self, value, param, ctx):
-        logdir: str = super().convert(value, param, ctx)
-        logdir_path = Path(logdir).expanduser().resolve()
-        if self.mkdir:
-            logdir_path.mkdir(parents=True, exist_ok=True)
-        return logdir_path
-
-
-class DatasetType(click.ParamType):
-    name = "dataset"
-    datasets: List[str] = [
-        "snelson1d",
-        "elevators",
-        "pol",
-        "houseelectric",
-        "3droad",
-        "buzz",
-        "keggdirected",
-        "keggundirected",
-        "song",
-    ]
-
-    def convert(self, value, param, ctx):
-        if value not in self.datasets:
-            self.fail(f"{value} dataset is not supported", param, ctx)
-        try:
-            dataname = value
-            data = load_data(dataname, as_tensor=True)
-            return data
-        except Exception as ex:
-            self.fail(f"{value} dataset is not supported", param, ctx)
-
-
-class KernelType(click.ParamType):
-    name = "dataset"
-    kernels = {"se": SquaredExponential, "matern32": Matern32}
-    param_keymap = {"var": "variance", "len": "lengthscales"}
-
-    @classmethod
-    def parse_kernel_parameters(cls, source: str):
-        params = [kv.split("=") for kv in source.split("_")]
-        params = {cls.param_keymap[k]: ast.literal_eval(v) for k, v in params}
-        return params
-
-    def convert(self, value, param, ctx):
-        try:
-            kernel_name, *conf = value.split("_", maxsplit=1)
-            kernel_class = self.kernels[kernel_name]
-            kernel_params = self.parse_kernel_parameters(conf[1]) if conf else {}
-
-            def create_kernel_fn(ndim: int):
-                positive = gpflow.utilities.positive(1e-5)
-                lengthscale = np.ones(ndim)
-                if "lengthscales" in kernel_params:
-                    lengthscale_param = kernel_params["lengthscales"]
-                    lengthscale = lengthscale * lengthscale_param
-                kernel = kernel_class()
-                kernel.lengthscales = gpflow.Parameter(lengthscale, transform=positive)
-                return kernel
-
-            return create_kernel_fn
-        except Exception as ex:
-            self.fail(f"{value} is not supported", param, ctx)
+ModelClass = TypeVar("ModelClass", type(LpSVGP), type(ClusterGP))
+ClusteringType = Literal["kmeans", "covertree"]
 
 
 @dataclass
@@ -107,7 +44,7 @@ class EntryContext:
 @click.group()
 @click.option("-d", "--dataset", type=DatasetType(), required=True)
 @click.option("-k", "--kernel", type=KernelType(), default="se")
-@click.option("-l", "--logdir", type=LogdirPath(), default=__default_logdir)
+@click.option("-l", "--logdir", type=LogdirPath(), default=LogdirPath.default_logdir)
 @click.option("-s", "--seed", type=int, default=0)
 @click.option("--jit/--no-jit", type=bool, default=True)
 @click.pass_context
