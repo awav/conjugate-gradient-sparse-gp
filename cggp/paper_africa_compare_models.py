@@ -162,6 +162,7 @@ if __name__ == "__main__":
 
     store_logs(Path(logdir_cggp, "train_mean.npy"), np.array(cggp_mean_train))
     store_logs(Path(logdir_cggp, "test_mean.npy"), np.array(cggp_mean_test))
+
     # # ClusterGP
     # #
     # logdir_clustergp = f"{logdir}/clustergp"
