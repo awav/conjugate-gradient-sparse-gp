@@ -204,6 +204,7 @@ def train_adam_covertree(
         use_jit=use_jit,
         monitor=monitor,
     )
+    click.echo("✪✪✪ Training finished ✪✪✪")
 
     # Post training procedures
     params = parameter_dict(model)
@@ -216,7 +217,7 @@ def train_adam_covertree(
 
     store_logs(Path(logdir, "train_mean.npy"), np.array(mean_train))
     store_logs(Path(logdir, "test_mean.npy"), np.array(mean_test))
-    click.echo("✓✓✓ Finished ✓✓✓")
+    click.echo("⭐⭐⭐ Script finished ⭐⭐⭐")
 
 
 def create_predict_fn(model, use_jit: bool = True):
