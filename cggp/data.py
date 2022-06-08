@@ -1,4 +1,4 @@
-from typing import Tuple, NamedTuple
+from typing import Tuple, NamedTuple, Optional
 from collections import namedtuple
 from pathlib import Path
 import numpy as np
@@ -90,7 +90,7 @@ def norm_dataset(data: Dataset) -> Dataset:
     return norm(data[0]), norm(data[1])
 
 
-def load_data(name: str, as_tensor: bool = False, normalise: bool = True) -> DatasetBundle:
+def load_data(name: str, as_tensor: bool = True, normalise: bool = True) -> DatasetBundle:
     if name == "snelson1d":
         train, test = snelson1d("~/.dataset/snelson1d/")
     elif name == "east_africa":
@@ -110,16 +110,20 @@ def load_data(name: str, as_tensor: bool = False, normalise: bool = True) -> Dat
     else:
         x_train, y_train = train
         x_test, y_test = test
-    x_train = _to_float(x_train, as_tensor=as_tensor)
-    y_train = _to_float(y_train, as_tensor=as_tensor)
-    x_test = _to_float(x_test, as_tensor=as_tensor)
-    y_test = _to_float(y_test, as_tensor=as_tensor)
+
+    x_train = to_float(x_train, as_tensor=as_tensor)
+    y_train = to_float(y_train, as_tensor=as_tensor)
+    x_test = to_float(x_test, as_tensor=as_tensor)
+    y_test = to_float(y_test, as_tensor=as_tensor)
 
     return DatasetBundle(name, (x_train, y_train), (x_test, y_test))
 
 
-def _to_float(arr: np.ndarray, as_tensor: bool):
-    dtype = default_float()
-    if as_tensor:
+def to_float(arr: np.ndarray, as_tensor: bool, dtype: Optional[tf.DType] = None):
+    if dtype is None:
+        dtype = default_float()
+    if as_tensor and not isinstance(arr, tf.Tensor):
         return tf.convert_to_tensor(arr, dtype=dtype)
+    elif as_tensor:
+        return tf.cast(arr, dtype=dtype)
     return arr.astype(dtype)
