@@ -27,6 +27,7 @@ def test_rff_kernel(dimension, num_inputs, num_bases, kernel_class):
     kxx = kernel(inputs)
     np.testing.assert_allclose(rff_approx, kxx, rtol=1e-3, atol=1e-2)
 
+
 @pytest.mark.parametrize("dimension,num_inputs,num_bases,num_samples", [(2, 4, int(1e7), 4099)])
 @pytest.mark.parametrize("kernel_class", [SquaredExponential, Matern32, Matern52])
 def test_rff_sample(dimension, num_inputs, num_bases, num_samples, kernel_class):
@@ -69,4 +70,4 @@ def test_rff_sample(dimension, num_inputs, num_bases, num_samples, kernel_class)
 
 
 if __name__ == "__main__":
-    pytest.main(args = [__file__])
+    pytest.main(args=[__file__])

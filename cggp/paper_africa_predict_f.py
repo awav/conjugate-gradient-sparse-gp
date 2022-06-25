@@ -56,7 +56,6 @@ if __name__ == "__main__":
 
     _, train_data, test_data = load_data("east_africa", as_tensor=as_tensor)
 
-
     def cggp_class(kernel, likelihood, iv, **kwargs):
         error_threshold = 1e-6
         conjugate_gradient = ConjugateGradient(error_threshold)
@@ -86,10 +85,9 @@ if __name__ == "__main__":
 
         predict_fn = create_predict_fn(sgpr, use_jit=use_jit)
         mean_train = batch_posterior_computation(predict_fn, train_data, monitor_batch_size)
-        mean_test = batch_posterior_computation(predict_fn, test_data, monitor_batch_size)    
+        mean_test = batch_posterior_computation(predict_fn, test_data, monitor_batch_size)
 
         store_logs(Path(Path(f).parent, "train_mean.npy"), np.array(mean_train))
         store_logs(Path(Path(f).parent, "test_mean.npy"), np.array(mean_test))
-
 
     print(f"End. Check tensorboard logdir {logdir}")

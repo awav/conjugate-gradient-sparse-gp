@@ -71,7 +71,9 @@ class ModifiedCoverTree:
                     node.children.append(child)
                 children = tf.stack([child.point for child in node.children])
                 if tf.size(balance_active_x) > 0:
-                    child_distances = tf.linalg.norm(children[:,None, ...] - balance_active_x[None,:, ...], axis=-1)
+                    child_distances = tf.linalg.norm(
+                        children[:, None, ...] - balance_active_x[None, :, ...], axis=-1
+                    )
                     nearest_child = tf.math.argmin(child_distances, axis=0)
                     for idx, child in enumerate(node.children):
                         child_indices = tf.equal(nearest_child, idx)
@@ -83,7 +85,6 @@ class ModifiedCoverTree:
                         child.data = (neighborhood_x, neighborhood_y)
                         if plotting:
                             child.original_data = (neighborhood_x, neighborhood_y)
-
 
         return None
 

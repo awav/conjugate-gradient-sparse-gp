@@ -21,12 +21,15 @@ def jit(apply: bool = True, **function_kwargs):
         if apply:
             return tf.function(func, **function_kwargs)
         return func
+
     return inner
+
 
 def store_logs(path: Path, logs: Dict):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     np.save(path, logs, allow_pickle=True)
+
 
 def to_numpy(logs: Dict):
     return {key: np.array(val) for key, val in logs.items()}

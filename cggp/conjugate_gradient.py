@@ -133,21 +133,29 @@ class EyePreconditioner(CGPreconditioner):
     def __call__(self, vec: Tensor, mat: Tensor) -> Tuple[Tensor, Tensor]:
         return vec, tf.reduce_sum(tf.square(vec), axis=-1, keepdims=True)
 
+
 class BlockPreconditioner(CGPreconditioner):
     def __init__(self, block_indices) -> None:
         super().__init__()
         self.block_indices = block_indices
-    
+
     def __call__(self, vec: Tensor, mat: Tensor) -> Tuple[Tensor, Tensor]:
         def cholesky_solve_linear_system(indices: Tensor):
             b = tf.gather(vec, indices)
-            A_indices = tf.concat((indices[:,None,None] + tf.zeros_like(indices[None,:,None]), indices[None,:,None] + tf.zeros_like(indices[:,None,None])), axis=2)
+            A_indices = tf.concat(
+                (
+                    indices[:, None, None] + tf.zeros_like(indices[None, :, None]),
+                    indices[None, :, None] + tf.zeros_like(indices[:, None, None]),
+                ),
+                axis=2,
+            )
             A = tf.gather_nd(mat, A_indices)
             L = tf.linalg.cholesky(A)
-            return tf.linalg.cholesky_solve(L,b)
-        
+            return tf.linalg.cholesky_solve(L, b)
+
         new_vec = tf.vectorized_map(cholesky_solve_linear_system, self.block_indices)
         return new_vec, tf.reduce_sum(new_vec * vec, axis=-1, keepdims=True)
+
 
 class ConjugateGradient:
     preconditioner: CGPreconditioner
