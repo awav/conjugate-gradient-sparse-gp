@@ -1,9 +1,9 @@
 from typing import Tuple, List
-import gpflow
 from typing import Callable, Literal, Optional
 import tensorflow as tf
 import matplotlib.pyplot as plt
 import math
+import numpy as np
 
 
 Tensor = tf.Tensor
@@ -16,6 +16,7 @@ class CoverTreeNode:
         radius,
         parent,
         data,
+        siblings: Optional[list] = [],
         plotting: bool = False,
     ):
         self.point = point
@@ -23,6 +24,7 @@ class CoverTreeNode:
         self.parent = parent
         self.data = data
         self.children = []
+        self.siblings = siblings
         if plotting:
             self.original_data = data
 
@@ -105,3 +107,65 @@ class ModifiedCoverTree:
         means, counts = zip(*means_and_counts)
         ctt = tf.convert_to_tensor
         return ctt(means, dtype=dtype)[..., None], ctt(counts, dtype=dtype)[..., None]
+
+
+class SiblingAwareCoverTree:
+    def __init__(
+        self,
+        distance: Callable,
+        data,
+        spatial_resolution: Optional[float] = None,
+        num_levels: Optional[int] = 1,
+        plotting: bool = False,
+    ):
+        self.distance = distance
+        (x, y) = data
+
+        root_mean = x.mean(axis=-2)
+        root_distances = self.distance((root_mean, x))
+        max_radius = np.max(root_distances)
+
+        if spatial_resolution is not None:
+            num_levels = math.ceil(math.log2(max_radius / spatial_resolution)) + 1
+            max_radius = spatial_resolution * (2 ** (num_levels - 1))
+
+        node = CoverTreeNode(root_mean, max_radius, None, data, [], plotting=plotting)
+        self.levels = [[] for _ in range(num_levels)]
+        self.levels[0].append(node)
+
+        for level in range(1, num_levels):
+            radius = max_radius / (2**level)
+            for node in self.levels[level - 1]:
+                (active_x, active_y) = node.data
+                while len(active_x) > 0:
+                    initial_point = active_x[0]
+                    initial_distances = self.distance((initial_point, active_x))
+                    initial_neighborhood = active_x[initial_distances <= radius, :]
+                    point = initial_neighborhood.mean(axis = -2)
+                    distances = self.distance((point, active_x))
+                    indices = distances <= radius
+                    neighborhood_x = active_x[indices, :]
+                    neighborhood_y = active_y[indices, :]
+                    active_x = active_x[~indices, :]
+                    active_y = active_y[~indices, :]
+                    node.data = (active_x, active_y)
+                    for sibling in node.siblings:
+                        (sibling_x, sibling_y) = sibling.data
+                        sibling_distances = self.distance((point, sibling_x))
+                        sibling_indices = sibling_distances <= radius
+                        sibling_neighborhood_x = sibling_x[sibling_indices, :]
+                        sibling_neighborhood_y = sibling_y[sibling_indices, :]
+                        neighborhood_x = np.concatenate((neighborhood_x, sibling_neighborhood_x), axis=-2)
+                        neighborhood_y = np.concatenate((neighborhood_y, sibling_neighborhood_y), axis=-2)
+                        sibling_x = sibling_x[~sibling_indices, :]
+                        sibling_y = sibling_y[~sibling_indices, :]
+                        sibling.data = (sibling_x, sibling_y)
+                    child = CoverTreeNode(point, radius, node, (neighborhood_x, neighborhood_y), plotting=plotting)
+                    self.levels[level].append(child)
+                    node.children.append(child)
+            for node in self.levels[level-1]:
+                for child in node.children:
+                    potential_siblings = node.children + [child for sibling in node.siblings for child in sibling.children]
+                    child.siblings = [sibling for sibling in potential_siblings if np.linalg.norm(sibling.point - child.point) <= 3*radius]
+
+        self.nodes = [node for level in self.levels for node in level]
