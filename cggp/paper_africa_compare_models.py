@@ -8,10 +8,9 @@ from gpflow.utilities import parameter_dict
 from utils import store_logs, to_numpy, jit
 from pathlib import Path
 
-from cli_utils import create_model_and_kmeans_update_fn, create_model_and_covertree_update_fn
+from cli_utils import create_model_and_covertree_update_fn
 from optimize import (
     train_using_adam_and_update,
-    train_using_lbfgs_and_update,
     create_monitor,
     transform_to_dataset,
 )
@@ -162,6 +161,7 @@ if __name__ == "__main__":
 
     store_logs(Path(logdir_cggp, "train_mean.npy"), np.array(cggp_mean_train))
     store_logs(Path(logdir_cggp, "test_mean.npy"), np.array(cggp_mean_test))
+
     # # ClusterGP
     # #
     # logdir_clustergp = f"{logdir}/clustergp"
