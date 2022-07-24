@@ -10,8 +10,9 @@ from kmeans import kmeans_lloyd
 from distance import create_distance_fn, DistanceType
 from optimize import kmeans_update_inducing_parameters, covertree_update_inducing_parameters
 from data import load_data
-from utils import jit
-from models import LpSVGP, ClusterGP
+from utils import jit, transform_to_dataset
+from models import LpSVGP, ClusterGP, CGGP
+from conjugate_gradient import ConjugateGradient
 
 
 ModelClass = TypeVar("ModelClass", type(LpSVGP), type(ClusterGP))
@@ -252,3 +253,34 @@ def create_model_and_covertree_update_fn(
 
     gpflow.utilities.set_trainable(model.inducing_variable, trainable_inducing_points)
     return model, update_fn
+
+def create_predict_fn(model, use_jit: bool = True):
+    @jit(use_jit)
+    def predict_fn(inputs):
+        mu, var = model.predict_f(inputs)
+        return mu, var
+
+    return predict_fn
+
+
+def batch_posterior_computation(predict_fn, data, batch_size):
+    data = transform_to_dataset(data, repeat=False, batch_size=batch_size)
+    means = []
+    variances = []
+    for (x, y) in data:
+        mean, variance = predict_fn(x)
+        means.append(mean.numpy())
+        variances.append(variance.numpy())
+    means = np.concatenate(means, axis=0)
+    variances = np.concatenate(variances, axis=0)
+    return means, variances
+
+
+def cggp_class(kernel, likelihood, iv, error_threshold: float = 1e-6, **kwargs):
+    conjugate_gradient = ConjugateGradient(error_threshold)
+    return CGGP(kernel, likelihood, iv, conjugate_gradient, **kwargs)
+
+
+def sgpr_class(train_data, kernel, likelihood, iv, **kwargs):
+    noise_variance = likelihood.variance
+    return gpflow.models.SGPR(train_data, kernel, iv, noise_variance=noise_variance)

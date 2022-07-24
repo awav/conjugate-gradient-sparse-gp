@@ -2,8 +2,7 @@ from dataclasses import dataclass
 from typing import Union, Callable, Optional
 import json
 import click
-from models import ClusterGP, CGGP, LpSVGP
-from conjugate_gradient import ConjugateGradient
+from models import CGGP
 from data import load_data
 import tensorflow as tf
 import numpy as np
@@ -18,6 +17,10 @@ from cli_utils import (
     create_model,
     create_model_and_kmeans_update_fn,
     create_model_and_covertree_update_fn,
+    create_predict_fn,
+    batch_posterior_computation,
+    cggp_class,
+    sgpr_class,
     DatasetType,
     KernelType,
     LogdirPath,
@@ -212,41 +215,23 @@ def train_adam_covertree(
     store_logs(Path(logdir, "params.npy"), params_np)
 
     predict_fn = create_predict_fn(model, use_jit=use_jit)
-    mean_train = batch_posterior_computation(predict_fn, train_data, test_batch_size)
-    mean_test = batch_posterior_computation(predict_fn, test_data, test_batch_size)
+
+    mean_train, variances_train = batch_posterior_computation(
+        predict_fn,
+        train_data,
+        test_batch_size,
+    )
+    mean_test, variances_test = batch_posterior_computation(
+        predict_fn,
+        test_data,
+        test_batch_size,
+    )
 
     store_logs(Path(logdir, "train_mean.npy"), np.array(mean_train))
     store_logs(Path(logdir, "test_mean.npy"), np.array(mean_test))
+    store_logs(Path(logdir, "train_variances.npy"), np.array(variances_train))
+    store_logs(Path(logdir, "test_variances.npy"), np.array(variances_test))
     click.echo("⭐⭐⭐ Script finished ⭐⭐⭐")
-
-
-def create_predict_fn(model, use_jit: bool = True):
-    @jit(use_jit)
-    def predict_fn(inputs):
-        mu, _ = model.predict_f(inputs)
-        return mu
-
-    return predict_fn
-
-
-def batch_posterior_computation(predict_fn, data, batch_size):
-    data = transform_to_dataset(data, repeat=False, batch_size=batch_size)
-    means = []
-    for (x, y) in data:
-        mean = predict_fn(x)
-        means.append(mean.numpy())
-    means = np.concatenate(means, axis=0)
-    return means
-
-
-def cggp_class(kernel, likelihood, iv, error_threshold: float = 1e-6, **kwargs):
-    conjugate_gradient = ConjugateGradient(error_threshold)
-    return CGGP(kernel, likelihood, iv, conjugate_gradient, **kwargs)
-
-
-def sgpr_class(train_data, kernel, likelihood, iv, **kwargs):
-    noise_variance = likelihood.variance
-    return gpflow.models.SGPR(train_data, kernel, iv, noise_variance=noise_variance)
 
 
 if __name__ == "__main__":

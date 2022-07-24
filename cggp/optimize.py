@@ -8,7 +8,7 @@ import tensorflow as tf
 from kmeans import kmeans_indices_and_distances
 from covertree import ModifiedCoverTree
 from models import ClusterGP, LpSVGP
-from utils import jit
+from utils import jit, transform_to_dataset
 from monitor import Monitor
 
 
@@ -291,19 +291,6 @@ def make_metrics_callback(model, train_data, test_data, batch_size: int, use_jit
         return {"train/elbo": elbo, "test/rmse": rmse, "test/nlpd": nlpd}
 
     return step_callback
-
-
-def transform_to_dataset(
-    data, batch_size, repeat: bool = True, shuffle: Optional[int] = None
-) -> tf.data.Dataset:
-    data = tf.data.Dataset.from_tensor_slices(data)
-    if shuffle is not None:
-        data = data.shuffle(shuffle)
-
-    data = data.batch(batch_size).prefetch(tf.data.experimental.AUTOTUNE)
-    if repeat:
-        data = data.repeat()
-    return data
 
 
 def create_monitor(
