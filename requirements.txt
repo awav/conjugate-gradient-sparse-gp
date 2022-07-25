@@ -1,0 +1,9 @@
+gpflow>=2.5.2
+tensorflow>=2.7.0
+tensorflow_probability>=0.15.0
+matplotlib
+numpy
+pandas
+pytest
+click
+-e git+ssh://git@github.com/hughsalimbeni/bayesian_benchmarks.git@a8fac6f285e700e29353208fb9828e7aa224aa4b#egg=bayesian_benchmarks
