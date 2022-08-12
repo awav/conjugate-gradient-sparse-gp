@@ -84,7 +84,7 @@ __model_types = click.Choice(["sgpr", "cdgp"])
 @click.option("-e", "--error-threshold", type=float, default=1e-6)
 @click.option("--tip/--no-tip", type=bool, default=False)
 @click.pass_context
-def mean_and_variance(
+def mean_variance(
     ctx: click.Context,
     model_class: str,
     batch_size: int,
@@ -142,7 +142,11 @@ def mean_and_variance(
 
     
     params_file = Path(logdir, "params.npy")
-    params = np.load(params_file, allow_pickle=False).item()
+    if not params_file.exists():
+        ctx.fail("øøø Parameters are not found øøø")
+
+    allow_pickle = True
+    params = np.load(params_file, allow_pickle=allow_pickle).item()
     gpflow.utilities.multiple_assign(model, params)
 
     click.echo("✪✪✪ Parameters assignment has finished ✪✪✪")
