@@ -29,7 +29,7 @@ from conjugate_gradient import ConjugateGradient
 
 Tensor = tf.Tensor
 ModelClass = TypeVar("ModelClass", type(LpSVGP), type(ClusterGP))
-ClusteringType = Literal["kmeans", "covertree"]
+ClusteringType = Literal["kmeans", "covertree", "oips"]
 
 
 @dataclass
@@ -73,7 +73,7 @@ def main(
 
 
 __distance_types = click.Choice(["covariance", "correlation", "euclidean"])
-__clustering_types = click.Choice(["covertree", "kmeans"])
+__clustering_types = click.Choice(["covertree", "kmeans", "oips"])
 
 
 @main.command()

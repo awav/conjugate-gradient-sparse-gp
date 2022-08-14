@@ -6,6 +6,7 @@ import gpflow
 from gpflow.utilities import parameter_dict
 import tensorflow as tf
 from kmeans import kmeans_indices_and_distances
+
 from covertree import ModifiedCoverTree
 from models import ClusterGP, LpSVGP
 from utils import jit, transform_to_dataset
@@ -30,11 +31,42 @@ def covertree_update_inducing_parameters(
     means = tf.boolean_mask(means, filter_empty_clusters)
     counts = tf.boolean_mask(counts, filter_empty_clusters)
 
-    model.inducing_variable.Z.assign(new_iv)
-    model.pseudo_u.assign(means)
-    model.cluster_counts.assign(counts)
-
     return new_iv, means, counts
+
+
+def oips_update_inducing_parameters(
+    model,
+    data,
+    oips_fn,
+    distance_fn,
+) -> Tuple[Tensor, Tensor, Tensor]:
+    inputs, outputs = data
+    iv = oips_fn(inputs)
+    m = tf.shape(iv)[0]
+    cross_distances = distance_fn((iv, data))
+    max_distance_indices = tf.argmax(cross_distances, axis=0)
+
+    def mean_and_count_fn(label: int) -> Tuple[Tensor, Tensor]:
+        mask = max_distance_indices == label
+        int_dtype = max_distance_indices.dtype
+        neighbours = tf.boolean_mask(outputs, mask, axis=0)
+        count = tf.cast(tf.shape(neighbours)[0], int_dtype)
+        mean = tf.reduce_mean(neighbours)
+        return mean, count
+
+    labels = tf.range(m, dtype=tf.int64)
+    means, counts = tf.map_fn(
+        mean_and_count_fn,
+        labels,
+        fn_output_signature=(data.dtype, labels.dtype),
+    )
+
+    nonempty_clusters = counts != 0
+    new_means = tf.boolean_mask(means, nonempty_clusters)
+    new_counts = tf.boolean_mask(counts, nonempty_clusters)
+    new_iv = tf.boolean_mask(iv, nonempty_clusters)
+
+    return new_iv, new_means, new_counts
 
 
 def kmeans_update_inducing_parameters(
@@ -53,10 +85,6 @@ def kmeans_update_inducing_parameters(
     u_init = tf.zeros([m, 1], dtype=new_iv.dtype)
     update_indices = tf.reshape(indices, [-1, 1])
     u = tf.tensor_scatter_nd_add(u_init, update_indices, y) / counts
-
-    model.inducing_variable.Z.assign(new_iv)
-    model.pseudo_u.assign(u)
-    model.cluster_counts.assign(counts)
 
     return new_iv, u, counts
 

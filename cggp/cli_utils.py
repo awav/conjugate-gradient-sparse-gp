@@ -1,4 +1,4 @@
-from typing import Literal, Callable, Optional, List, Optional, TypeVar
+from typing import Literal, Callable, Optional, List, Optional, TypeVar, Dict
 from pathlib import Path
 
 import click
@@ -7,8 +7,13 @@ import numpy as np
 import tensorflow as tf
 
 from kmeans import kmeans_lloyd
+from oips import oips
 from distance import create_distance_fn, DistanceType
-from optimize import kmeans_update_inducing_parameters, covertree_update_inducing_parameters
+from optimize import (
+    kmeans_update_inducing_parameters,
+    covertree_update_inducing_parameters,
+    oips_update_inducing_parameters,
+)
 from data import load_data
 from utils import jit, transform_to_dataset
 from models import LpSVGP, ClusterGP, CGGP
@@ -16,7 +21,7 @@ from conjugate_gradient import ConjugateGradient
 
 
 ModelClass = TypeVar("ModelClass", type(LpSVGP), type(ClusterGP))
-ClusteringType = Literal["kmeans", "covertree"]
+ClusteringType = Literal["kmeans", "covertree", "oips"]
 
 
 class FloatType(click.ParamType):
@@ -94,7 +99,7 @@ class KernelType(click.ParamType):
             kernel_params = self.parse_kernel_parameters(conf[1]) if conf else {}
 
             def create_kernel_fn(ndim: int):
-                positive = gpflow.utilities.positive(1e-5)
+                positive = gpflow.utilities.positive(1e-6)
                 lengthscale = np.ones(ndim)
                 if "lengthscales" in kernel_params:
                     lengthscale_param = kernel_params["lengthscales"]
@@ -177,6 +182,36 @@ def create_covertree_update_fn(
     return update_fn
 
 
+def create_oips_update_fn(
+    model,
+    data,
+    rho: float = 0.5,
+    use_jit: bool = True,
+    max_points: int = -1,
+    distance_type: DistanceType = "covariance",
+):
+    """
+    By default method will use half of the size of
+    dataset for the number of inducing points.
+    """
+
+    distance_fn = create_distance_fn(model.kernel, distance_type)
+    distance_fn = jit(use_jit)(distance_fn)
+    kernel = model.kernel
+    if max_points is None or max_points <= 0:
+        max_points = tf.shape(data[0])[0]
+
+    @jit(use_jit)
+    def oips_fn(inputs):
+        return oips(kernel, inputs, rho, max_points)
+
+    @jit(use_jit)
+    def update_fn():
+        return oips_update_inducing_parameters(model, data, oips_fn, distance_fn)
+
+    return update_fn
+
+
 def create_update_fn(
     clustering_type: ClusteringType,
     model,
@@ -193,6 +228,10 @@ def create_update_fn(
         return create_covertree_update_fn(
             model, data, use_jit=use_jit, distance_type=distance_type, **clustering_kwargs
         )
+    elif clustering_type == "oips":
+        return create_oips_update_fn(
+            model, data, use_jit=use_jit, distance_type=distance_type, **clustering_kwargs
+        )
     raise ValueError(f"Unknown value for {clustering_type}")
 
 
@@ -203,56 +242,42 @@ def kernel_fn(dim):
     return kernel
 
 
-def create_model_and_kmeans_update_fn(
+def create_model_and_update_fn(
     model_class: ModelClass,
-    data,
-    num_inducing_points: int,
+    train_data,
+    clustering_type: ClusteringType,
     use_jit: bool = True,
     distance_type: DistanceType = "covariance",
     trainable_inducing_points: bool = False,
-    **model_kwargs,
+    model_kwargs: Optional[Dict] = None,
+    clustering_kwargs: Optional[Dict] = None,
 ):
-    model = create_model(
-        model_class,
-        kernel_fn,
-        data,
-        num_inducing_points=num_inducing_points,
-        **model_kwargs,
-    )
-    update_fn = create_update_fn(
-        "kmeans",
+    model_kwargs = {} if model_kwargs is None else model_kwargs
+    clustering_kwargs = {} if clustering_kwargs is None else clustering_kwargs
+
+    model = create_model(model_class, kernel_fn, train_data, **model_kwargs)
+    internal_update_fn = create_update_fn(
+        clustering_type,
         model,
-        data,
-        num_inducing_points=num_inducing_points,
+        train_data,
         use_jit=use_jit,
         distance_type=distance_type,
+        **clustering_kwargs,
     )
+
+    def update_fn():
+        iv, means, count = internal_update_fn()
+        if isinstance(model, CGGP):
+            model.inducing_variable.Z.assign(iv)
+            model.pseudo_u.assign(means)
+            model.cluster_counts.assign(count)
+        else:
+            model.inducing_variable.assign(iv)
+        return iv, means, count
 
     gpflow.utilities.set_trainable(model.inducing_variable, trainable_inducing_points)
     return model, update_fn
 
-
-def create_model_and_covertree_update_fn(
-    model_class: ModelClass,
-    data,
-    spatial_resolution: float,
-    use_jit: bool = True,
-    distance_type: DistanceType = "covariance",
-    trainable_inducing_points: bool = False,
-    **model_kwargs,
-):
-    model = create_model(model_class, kernel_fn, data, **model_kwargs)
-    update_fn = create_update_fn(
-        "covertree",
-        model,
-        data,
-        spatial_resolution=spatial_resolution,
-        use_jit=use_jit,
-        distance_type=distance_type,
-    )
-
-    gpflow.utilities.set_trainable(model.inducing_variable, trainable_inducing_points)
-    return model, update_fn
 
 def create_predict_fn(model, use_jit: bool = True):
     @jit(use_jit)
