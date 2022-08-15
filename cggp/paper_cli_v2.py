@@ -10,7 +10,7 @@ import tensorflow as tf
 import numpy as np
 import gpflow
 from gpflow.utilities import parameter_dict
-from utils import store_logs, to_numpy, jit
+from utils import store_logs, to_numpy
 from pathlib import Path
 
 from data import DatasetBundle, Dataset, to_float
@@ -35,13 +35,17 @@ from optimize import (
 )
 
 
+PrecisionName = Literal["fp32", "fp64"]
 __model_types = click.Choice(["sgpr", "cdgp"])
+__distance_types = click.Choice(["euclidean", "covariance", "correlation"])
+__precision_names: Dict[np.dtype, PrecisionName] = {np.float32: "fp32", np.float64: "fp64"}
 
 
 @dataclass
 class MainContext:
     seed: int
     logdir: Union[Path, str]
+    model_class: Literal["sgpr", "cdgp"]
     dataset: DatasetBundle
     train_data: Dataset
     test_data: Dataset
@@ -49,7 +53,7 @@ class MainContext:
     model_class_fn: Callable
     jit: bool
     jitter: float
-    precision: tf.DType
+    precision: PrecisionName
     extra_obj: Dict
 
 
@@ -105,6 +109,7 @@ def main(
     obj = MainContext(
         seed,
         str(logdir),
+        model_class,
         dataset,
         train_data,
         test_data,
@@ -112,7 +117,7 @@ def main(
         model_class_fn,
         jit,
         jitter,
-        precision,
+        __precision_names[precision],
         extra_obj=dict(),
     )
     ctx.obj = obj
@@ -120,7 +125,7 @@ def main(
 
 @main.group("covertree")
 @click.option("-s", "--spatial-resolution", type=float, required=True)
-@click.option("-d", "--distance-type", type=DistanceType, default="euclidean")
+@click.option("-d", "--distance-type", type=__distance_types, default="euclidean")
 @click.pass_context
 def covertree(ctx: click.Context, spatial_resolution: float, distance_type: DistanceType):
     obj: MainContext = ctx.obj
@@ -143,10 +148,12 @@ def covertree(ctx: click.Context, spatial_resolution: float, distance_type: Dist
         distance_type=distance_type,
     )
 
+    ctx.obj = obj
+
 
 @main.group("kmeans")
 @click.option("-m", "--max-num-ip", type=int, required=True)
-@click.option("-d", "--distance-type", type=DistanceType, default="euclidean")
+@click.option("-d", "--distance-type", type=__distance_types, default="euclidean")
 @click.pass_context
 def kmeans(ctx: click.Context, max_num_ip: int, distance_type: DistanceType):
     obj: MainContext = ctx.obj
@@ -169,11 +176,13 @@ def kmeans(ctx: click.Context, max_num_ip: int, distance_type: DistanceType):
         distance_type=distance_type,
     )
 
+    ctx.obj = obj
+
 
 @main.group("oips")
 @click.option("-r", "--rho", type=float, required=True)
 @click.option("-m", "--max-num-ip", type=int, required=True)
-@click.option("-d", "--distance-type", type=DistanceType, default="euclidean")
+@click.option("-d", "--distance-type", type=__distance_types, default="euclidean")
 @click.pass_context
 def oips(ctx: click.Context, rho: float, max_num_ip: int, distance_type: DistanceType):
     obj: MainContext = ctx.obj
@@ -196,10 +205,12 @@ def oips(ctx: click.Context, rho: float, max_num_ip: int, distance_type: Distanc
         distance_type=distance_type,
     )
 
+    ctx.obj = obj
+
 
 @click.command("train-adam")
 @click.option("-n", "--num-iterations", type=int, required=True)
-@click.option("-b", "--batch-size", type=int, required=True)
+@click.option("-b", "--batch-size", type=int)
 @click.option("-tb", "--test-batch-size", type=int)
 @click.option("-l", "--learning-rate", type=float, default=0.01)
 @click.option("--tip/--no-tip", type=bool, default=False)
@@ -208,7 +219,6 @@ def oips(ctx: click.Context, rho: float, max_num_ip: int, distance_type: Distanc
 def train_adam(
     ctx: click.Context,
     num_iterations: int,
-    model_class: str,
     batch_size: int,
     test_batch_size: int,
     learning_rate: float,
@@ -227,8 +237,13 @@ def train_adam(
     clustering_type = obj.extra_obj["clustering_type"]
     distance_type = obj.extra_obj["distance_type"]
 
+    gpflow.utilities.set_trainable(model.inducing_variable, trainable_inducing_points)
+
+    if batch_size is None:
+        batch_size = train_data[0].shape[0]
+
     if test_batch_size is None:
-        test_batch_size = batch_size
+        test_batch_size = test_data[0].shape[0]
 
     monitor = create_monitor(
         model,
@@ -273,7 +288,7 @@ def train_adam(
         test_batch_size,
     )
 
-    m = int(model.inducing_points.num_inducing)
+    m = int(model.inducing_variable.num_inducing)
     info = {
         "seed": obj.seed,
         "dataset_name": obj.dataset.name,
@@ -281,7 +296,7 @@ def train_adam(
         "num_iterations": num_iterations,
         "use_jit": use_jit,
         "jitter": obj.jitter,
-        "precision": str(obj.precision),
+        "precision": obj.precision,
         "learning_rate": learning_rate,
         "logdir": logdir,
         "batch_size": batch_size,
@@ -290,7 +305,7 @@ def train_adam(
         "input_dimension": train_data[0].shape[-1],
         "clustering_type": clustering_type,
         "distance_type": distance_type,
-        "model_class": model_class,
+        "model_class": obj.model_class,
         "trainable_inducing_points": trainable_inducing_points,
     }
     info_str = json.dumps(info, indent=2)
@@ -303,9 +318,9 @@ def train_adam(
     click.echo("⭐⭐⭐ Script finished ⭐⭐⭐")
 
 
-covertree.add_command(train_adam, "train-w-adam")
-kmeans.add_command(train_adam, "train-w-adam")
-oips.add_command(train_adam, "train-w-adam")
+covertree.add_command(train_adam, "train-adam")
+kmeans.add_command(train_adam, "train-adam")
+oips.add_command(train_adam, "train-adam")
 
 
 if __name__ == "__main__":

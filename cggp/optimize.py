@@ -7,7 +7,7 @@ from gpflow.utilities import parameter_dict
 import tensorflow as tf
 from kmeans import kmeans_indices_and_distances
 
-from covertree import ModifiedCoverTree
+from covertree import ModifiedCoverTree, SiblingAwareCoverTree
 from models import ClusterGP, LpSVGP
 from utils import jit, transform_to_dataset
 from monitor import Monitor
@@ -22,9 +22,14 @@ def covertree_update_inducing_parameters(
     distance_fn,
     spatial_resolution: float,
 ) -> Tuple[Tensor, Tensor, Tensor]:
-    covertree = ModifiedCoverTree(distance_fn, data, spatial_resolution=spatial_resolution)
+    # covertree = ModifiedCoverTree(distance_fn, data, spatial_resolution=spatial_resolution)
+    data = data[0].numpy(), data[1].numpy()
+    covertree = SiblingAwareCoverTree(distance_fn, data, spatial_resolution=spatial_resolution)
     new_iv = covertree.centroids
     means, counts = covertree.cluster_mean_and_counts
+    new_iv = tf.convert_to_tensor(new_iv)
+    means = tf.convert_to_tensor(means)
+    counts = tf.convert_to_tensor(counts)
 
     filter_empty_clusters = tf.reshape(counts != 0.0, -1)
     new_iv = tf.boolean_mask(new_iv, filter_empty_clusters)

@@ -272,7 +272,7 @@ def create_model_and_update_fn(
             model.pseudo_u.assign(means)
             model.cluster_counts.assign(count)
         else:
-            model.inducing_variable.assign(iv)
+            model.inducing_variable.Z.assign(iv)
         return iv, means, count
 
     gpflow.utilities.set_trainable(model.inducing_variable, trainable_inducing_points)
