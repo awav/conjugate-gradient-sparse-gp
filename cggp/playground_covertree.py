@@ -1,5 +1,5 @@
 import numpy as np
-from covertree import SiblingAwareCoverTree
+from covertree import CoverTree
 import matplotlib.pyplot as plt
 import time
 
@@ -13,7 +13,7 @@ if __name__ == "__main__":
     data = x, y
     np.savetxt(f"ct_x.csv", x, delimiter=",")
     start = time.time()
-    tree = SiblingAwareCoverTree(euclid_distance, data, spatial_resolution=0.18/16, plotting=True)
+    tree = CoverTree(euclid_distance, data, spatial_resolution=0.18/16)
     print(f"Total time: {time.time() - start}")
     fig, axes = plt.subplots(1, len(tree.levels), figsize=((6 * len(tree.levels), 6)))
     for level in range(len(tree.levels)):
