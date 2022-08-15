@@ -38,7 +38,7 @@ class CoverTree:
         spatial_resolution: Optional[float] = None,
         num_levels: Optional[int] = 1,
         lloyds = True,
-        voronoi = False,
+        voronoi = True,
     ):
         self.distance = distance
         (x, y) = data
@@ -54,7 +54,6 @@ class CoverTree:
         root = CoverTreeNode(root_mean, max_radius, None, data, None)
         self.levels = [[] for _ in range(num_levels)]
         self.levels[0].append(root)
-
 
         for level in range(1, num_levels):
             radius = max_radius / (2**level)
