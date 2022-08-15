@@ -3,7 +3,7 @@ from email.policy import default
 from typing import Literal, Union, Callable, Optional, Dict
 import json
 import click
-from .cli_utils import ModelClass
+from cli_utils import ModelClass
 from models import CGGP
 from data import load_data
 import tensorflow as tf
@@ -55,13 +55,13 @@ class MainContext:
 
 @click.group()
 @click.option("-d", "--dataset", type=DatasetType(), required=True)
+@click.option("-mc", "--model-class", type=__model_types, required=True)
 @click.option("-p", "--precision", type=FloatType(), default="fp64")
 @click.option("-j", "--jitter", type=float, default=1e-6)
 @click.option("-k", "--kernel", type=KernelType(), default="se")
 @click.option("-l", "--logdir", type=LogdirPath(), default=LogdirPath.default_logdir)
 @click.option("-s", "--seed", type=int, default=0)
 @click.option("--jit/--no-jit", type=bool, default=True)
-@click.option("-mc", "--model-class", type=__model_types, required=True)
 @click.option("-e", "--error-threshold", type=float, default=1e-6)
 @click.pass_context
 def main(
@@ -197,7 +197,7 @@ def oips(ctx: click.Context, rho: float, max_num_ip: int, distance_type: Distanc
     )
 
 
-@click.command()
+@click.command("train-adam")
 @click.option("-n", "--num-iterations", type=int, required=True)
 @click.option("-b", "--batch-size", type=int, required=True)
 @click.option("-tb", "--test-batch-size", type=int)
