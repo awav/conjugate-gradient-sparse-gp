@@ -187,7 +187,7 @@ def paper_visualization():
             data_frame[f"wasserstein_distances_{dim}_{s}"] = np.array(wasserstein_distances)
             data_frame[f"cg_iterations_{dim}_{s}"] = np.array(cg_iterations)
 
-            # plot(data, noise, resolutions, *metrics)
+            plot(data, noise, resolutions, *metrics)
 
     dirpath = str(Path(Path(__file__).parent))
     store_metrics(dirpath, noise, lengthscale, data_frame)

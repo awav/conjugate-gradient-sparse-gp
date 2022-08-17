@@ -156,11 +156,21 @@ if __name__ == "__main__":
     store_logs(Path(logdir_cggp, "params.npy"), cggp_params_np)
 
     cggp_predict_fn = create_predict_fn(cggp, use_jit=use_jit)
-    cggp_mean_train = batch_posterior_computation(cggp_predict_fn, train_data, monitor_batch_size)
-    cggp_mean_test = batch_posterior_computation(cggp_predict_fn, test_data, monitor_batch_size)
+    cggp_mean_train, cggp_variance_train = batch_posterior_computation(
+        cggp_predict_fn,
+        train_data,
+        monitor_batch_size,
+    )
+    cggp_mean_test, cggp_variance_test = batch_posterior_computation(
+        cggp_predict_fn,
+        test_data,
+        monitor_batch_size,
+    )
 
     store_logs(Path(logdir_cggp, "train_mean.npy"), np.array(cggp_mean_train))
+    store_logs(Path(logdir_cggp, "train_variance.npy"), np.array(cggp_variance_train))
     store_logs(Path(logdir_cggp, "test_mean.npy"), np.array(cggp_mean_test))
+    store_logs(Path(logdir_cggp, "test_variance.npy"), np.array(cggp_variance_test))
 
     # # ClusterGP
     # #

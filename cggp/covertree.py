@@ -1,12 +1,12 @@
 from typing import Tuple, List
 from typing import Callable, Literal, Optional
-# import tensorflow as tf
+import tensorflow as tf
 import matplotlib.pyplot as plt
 import math
 import numpy as np
 
 
-# Tensor = tf.Tensor
+Tensor = tf.Tensor
 
 
 class CoverTreeNode:
@@ -29,7 +29,6 @@ class CoverTreeNode:
         self.R_neighbors = R_neighbors
 
 
-
 class CoverTree:
     def __init__(
         self,
@@ -40,7 +39,11 @@ class CoverTree:
         lloyds = True,
         voronoi = True,
     ):
-        self.distance = distance
+        def distance_fn(args):
+            result = distance(args)
+            return np.array(result, dtype=result.dtype.as_numpy_dtype)
+
+        self.distance = distance_fn
         (x, y) = data
 
         root_mean = x.mean(axis=-2)
@@ -104,3 +107,21 @@ class CoverTree:
                             child.original_data = (child.data[0].copy(), child.data[1].copy())
 
         self.nodes = [node for level in self.levels for node in level]
+
+    @property
+    def centroids(self):
+        return np.stack([node.point for node in self.levels[-1]])
+
+    @property
+    def cluster_ys(self) -> List[Tensor]:
+        ys = [node.data[1] for node in self.levels[-1]]
+        return ys
+
+    @property
+    def cluster_mean_and_counts(self) -> Tuple[Tensor, Tensor]:
+        means_and_counts = [
+            (np.mean(node.data[1]), node.data[1].shape[0]) for node in self.levels[-1]
+        ]
+        dtype = self.levels[-1][0].data[1].dtype
+        means, counts = zip(*means_and_counts)
+        return means.astype(dtype)[..., None], counts.astype(dtype)[..., None]

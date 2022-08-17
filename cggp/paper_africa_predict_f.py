@@ -7,29 +7,11 @@ import gpflow
 from utils import store_logs, jit
 from pathlib import Path
 
-from cli_utils import create_model_and_covertree_update_fn
-from optimize import (
-    transform_to_dataset,
+from cli_utils import (
+    create_model_and_covertree_update_fn,
+    batch_posterior_computation,
+    create_predict_fn,
 )
-
-
-def create_predict_fn(model, use_jit: bool = True):
-    @jit(use_jit)
-    def predict_fn(inputs):
-        mu, _ = model.predict_f(inputs)
-        return mu
-
-    return predict_fn
-
-
-def batch_posterior_computation(predict_fn, data, batch_size):
-    data = transform_to_dataset(data, repeat=False, batch_size=batch_size)
-    means = []
-    for (x, y) in data:
-        mean = predict_fn(x)
-        means.append(mean.numpy())
-    means = np.concatenate(means, axis=0)
-    return means
 
 
 if __name__ == "__main__":
@@ -55,7 +37,6 @@ if __name__ == "__main__":
     as_tensor = True
 
     _, train_data, test_data = load_data("east_africa", as_tensor=as_tensor)
-
 
     def cggp_class(kernel, likelihood, iv, **kwargs):
         error_threshold = 1e-6
@@ -85,11 +66,20 @@ if __name__ == "__main__":
         gpflow.utilities.multiple_assign(cggp, params)
 
         predict_fn = create_predict_fn(sgpr, use_jit=use_jit)
-        mean_train = batch_posterior_computation(predict_fn, train_data, monitor_batch_size)
-        mean_test = batch_posterior_computation(predict_fn, test_data, monitor_batch_size)    
+        mean_train, variance_train = batch_posterior_computation(
+            predict_fn,
+            train_data,
+            monitor_batch_size,
+        )
+        mean_test, variance_test = batch_posterior_computation(
+            predict_fn,
+            test_data,
+            monitor_batch_size,
+        )
 
         store_logs(Path(Path(f).parent, "train_mean.npy"), np.array(mean_train))
         store_logs(Path(Path(f).parent, "test_mean.npy"), np.array(mean_test))
-
+        store_logs(Path(Path(f).parent, "train_variance.npy"), np.array(variance_train))
+        store_logs(Path(Path(f).parent, "test_variance.npy"), np.array(variance_test))
 
     print(f"End. Check tensorboard logdir {logdir}")

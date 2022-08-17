@@ -1,21 +1,16 @@
 from dataclasses import dataclass
-from typing import Union, Callable, Optional
-import json
+from typing import Union, Callable
 import click
-from models import CGGP
-from data import load_data
 import tensorflow as tf
 import numpy as np
 import gpflow
-from gpflow.utilities import parameter_dict
-from utils import store_logs, to_numpy, jit
+from utils import store_logs
 from pathlib import Path
 
 from data import DatasetBundle, to_float
 
 from cli_utils import (
     create_model,
-    create_model_and_kmeans_update_fn,
     create_model_and_covertree_update_fn,
     create_predict_fn,
     batch_posterior_computation,
@@ -25,12 +20,6 @@ from cli_utils import (
     KernelType,
     LogdirPath,
     FloatType,
-)
-
-from optimize import (
-    train_using_adam_and_update,
-    train_using_lbfgs_and_update,
-    create_monitor,
 )
 
 
@@ -89,21 +78,17 @@ __model_types = click.Choice(["sgpr", "cdgp"])
 
 @main.command()
 @click.option("-mc", "--model-class", type=__model_types, required=True)
-@click.option("-n", "--num-iterations", type=int, required=True)
 @click.option("-s", "--spatial-resolution", type=float, required=True)
 @click.option("-b", "--batch-size", type=int, required=True)
 @click.option("-tb", "--test-batch-size", type=int)
-@click.option("-l", "--learning-rate", type=float, default=0.01)
 @click.option("-e", "--error-threshold", type=float, default=1e-6)
 @click.option("--tip/--no-tip", type=bool, default=False)
 @click.pass_context
-def train_adam_covertree(
+def mean_variance(
     ctx: click.Context,
-    num_iterations: int,
     model_class: str,
     batch_size: int,
     test_batch_size: int,
-    learning_rate: float,
     error_threshold: float,
     spatial_resolution: float,
     tip: bool,
@@ -155,63 +140,16 @@ def train_adam_covertree(
     else:
         raise ValueError(f"Unknown value for model class {model_class}")
 
-    iv, means, cluster_counts = update_fn()
-    model.inducing_variable.Z.assign(iv)
-    if isinstance(model, CGGP):
-        model.cluster_counts.assign(cluster_counts)
-        model.pseudo_u.assign(means)
+    
+    params_file = Path(logdir, "params.npy")
+    if not params_file.exists():
+        ctx.fail("øøø Parameters are not found øøø")
 
-    m = int(iv.shape[0])
+    allow_pickle = True
+    params = np.load(params_file, allow_pickle=allow_pickle).item()
+    gpflow.utilities.multiple_assign(model, params)
 
-    info = {
-        "command": "train_adam_covertree",
-        "seed": obj.seed,
-        "dataset_name": dataset.name,
-        "num_inducing_points": int(m),
-        "num_iterations": num_iterations,
-        "use_jit": use_jit,
-        "jitter": obj.jitter,
-        "precision": str(obj.precision),
-        "learning_rate": learning_rate,
-        "logdir": logdir,
-        "batch_size": batch_size,
-        "train_size": train_data[0].shape[0],
-        "test_size": test_data[0].shape[0],
-        "input_dimension": train_data[0].shape[-1],
-        "clustering_type": "covertree",
-        "model_class": model_class,
-        "trainable_inducing_points": trainable_inducing_points,
-    }
-    info_str = json.dumps(info, indent=2)
-    click.echo(f"-> {info_str}")
-
-    monitor = create_monitor(
-        model,
-        train_data,
-        test_data,
-        test_batch_size,
-        use_tensorboard=use_tb,
-        logdir=logdir,
-    )
-
-    click.echo("★★★ Start training ★★★")
-    train_using_adam_and_update(
-        train_data,
-        model,
-        num_iterations,
-        batch_size,
-        learning_rate,
-        update_fn=None,
-        update_during_training=None,
-        use_jit=use_jit,
-        monitor=monitor,
-    )
-    click.echo("✪✪✪ Training finished ✪✪✪")
-
-    # Post training procedures
-    params = parameter_dict(model)
-    params_np = to_numpy(params)
-    store_logs(Path(logdir, "params.npy"), params_np)
+    click.echo("✪✪✪ Parameters assignment has finished ✪✪✪")
 
     predict_fn = create_predict_fn(model, use_jit=use_jit)
 
@@ -225,6 +163,8 @@ def train_adam_covertree(
         test_data,
         test_batch_size,
     )
+
+    click.echo("✪✪✪ Mean and variance computation has finished ✪✪✪")
 
     store_logs(Path(logdir, "train_mean.npy"), np.array(mean_train))
     store_logs(Path(logdir, "test_mean.npy"), np.array(mean_test))
