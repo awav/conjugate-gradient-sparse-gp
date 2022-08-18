@@ -22,7 +22,6 @@ class CoverTreeNode:
         self.radius = radius
         self.parent = parent
         self.data = data
-        self.original_data = (data[0].copy(), data[1].copy())
         self.children = []
         if R_neighbors is None:
             R_neighbors = [self]
@@ -38,6 +37,7 @@ class CoverTree:
         num_levels: Optional[int] = 1,
         lloyds = True,
         voronoi = True,
+        plotting = False,
     ):
         def distance_fn(args):
             result = distance(args)
@@ -55,6 +55,8 @@ class CoverTree:
             max_radius = spatial_resolution * (2 ** (num_levels - 1))
 
         root = CoverTreeNode(root_mean, max_radius, None, data, None)
+        if voronoi: root.voronoi_data = (root.data[0].copy(), root.data[1].copy())
+        if plotting: root.plotting_data = (root.data[0].copy(), root.data[1].copy())
         self.levels = [[] for _ in range(num_levels)]
         self.levels[0].append(root)
 
@@ -64,7 +66,7 @@ class CoverTree:
                 while len(parent.data[0]) > 0:
                     initial_point = parent.data[0][0]
                     if lloyds:
-                        initial_R_neighbor_x = np.concatenate([r.data[0] for r in parent.R_neighbors], axis=-2)
+                        initial_R_neighbor_x = parent.data[0]
                         initial_distances = self.distance((initial_point, initial_R_neighbor_x))
                         initial_neighborhood = initial_R_neighbor_x[initial_distances <= radius, :]
                         point = initial_neighborhood.mean(axis = -2)
@@ -86,25 +88,28 @@ class CoverTree:
                 potential_child_R_neighbors = [child for R_neighbor in parent.R_neighbors for child in R_neighbor.children]
                 for child in parent.children:
                     child.R_neighbors = [R_neighbor for R_neighbor in potential_child_R_neighbors if np.linalg.norm(R_neighbor.point - child.point) <= 4*radius]
+                    if plotting: child.plotting_data = (child.data[0].copy(), child.data[1].copy())
             if voronoi:
                 for parent in self.levels[level-1]:
-                    (voronoi_x, voronoi_y) = parent.original_data
+                    (voronoi_x, voronoi_y) = parent.voronoi_data
                     if voronoi_x.size > 0:
                         potential_child_R_neighbors = [child for R_neighbor in parent.R_neighbors for child in R_neighbor.children]
                         potential_points = np.stack([child.point for child in potential_child_R_neighbors])
                         potential_distances = np.linalg.norm(potential_points[:,None,...] - voronoi_x[None,:,...], axis=-1)
                         nearest_potential_child = np.argmin(potential_distances, axis=0)
                         for (idx, child) in enumerate(potential_child_R_neighbors):
+                            if not hasattr(child, "voronoi_data"):
+                                child.voronoi_data = (np.empty((0,parent.voronoi_data[0].shape[-1])), np.empty((0,parent.voronoi_data[1].shape[-1])))
                             child_indices = nearest_potential_child == idx
                             node_neighborhood_x = voronoi_x[child_indices, :]
                             node_neighborhood_y = voronoi_y[child_indices, :]
-                            neighborhood_x = np.concatenate((child.data[0], node_neighborhood_x))
-                            neighborhood_y = np.concatenate((child.data[1], node_neighborhood_y))
+                            neighborhood_x = np.concatenate((child.voronoi_data[0], node_neighborhood_x))
+                            neighborhood_y = np.concatenate((child.voronoi_data[1], node_neighborhood_y))
                             voronoi_x = voronoi_x[~child_indices, :]
                             voronoi_y = voronoi_y[~child_indices, :]
                             nearest_potential_child = nearest_potential_child[~child_indices]
-                            child.data = (neighborhood_x, neighborhood_y)
-                            child.original_data = (child.data[0].copy(), child.data[1].copy())
+                            child.voronoi_data = (neighborhood_x, neighborhood_y)
+                            child.data = (child.voronoi_data[0].copy(), child.voronoi_data[1].copy())
 
         self.nodes = [node for level in self.levels for node in level]
 
