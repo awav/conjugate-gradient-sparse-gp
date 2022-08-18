@@ -70,6 +70,14 @@ class CoverTree:
                         initial_distances = self.distance((initial_point, initial_R_neighbor_x))
                         initial_neighborhood = initial_R_neighbor_x[initial_distances <= radius, :]
                         point = initial_neighborhood.mean(axis = -2)
+                        for R_neighbor in parent.R_neighbors:
+                            for child in R_neighbor.children:
+                                if np.linalg.norm(point - child.point) < radius:
+                                    point = initial_point
+                                    break
+                            else:
+                                continue
+                            break
                     else:
                         point = initial_point
                     neighborhood_x = np.empty((0,parent.data[0].shape[-1]))
