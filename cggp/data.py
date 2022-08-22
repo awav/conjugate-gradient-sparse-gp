@@ -90,7 +90,7 @@ def norm_dataset(data: Dataset) -> Dataset:
     return norm(data[0]), norm(data[1])
 
 
-def load_data(name: str, as_tensor: bool = True, normalise: bool = True) -> DatasetBundle:
+def load_data(name: str, as_tensor: bool = True, normalise: bool = True, seed: int = 0) -> DatasetBundle:
     if name == "snelson1d":
         train, test = snelson1d("~/.dataset/snelson1d/")
     elif name == "east_africa":
@@ -100,7 +100,7 @@ def load_data(name: str, as_tensor: bool = True, normalise: bool = True) -> Data
         if not name.startswith("Wilson_"):
             uci_name = f"Wilson_{name}"
 
-        dat = getattr(bbd, uci_name)(prop=0.67)
+        dat = getattr(bbd, uci_name)(split=seed, prop=0.67)
         train, test = (dat.X_train, dat.Y_train), (dat.X_test, dat.Y_test)
 
     if normalise:

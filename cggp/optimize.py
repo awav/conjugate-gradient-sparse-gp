@@ -5,7 +5,7 @@ import tensorflow as tf
 import gpflow
 from gpflow.utilities import parameter_dict
 import tensorflow as tf
-from kmeans import kmeans_indices_and_distances
+from selection import kmeans_indices_and_distances
 
 from covertree import ModifiedCoverTree, SiblingAwareCoverTree
 from models import ClusterGP, LpSVGP
@@ -148,7 +148,7 @@ def train_vanilla_using_lbfgs(
 
 def train_using_lbfgs_and_update(
     data,
-    model: Union[ClusterGP, gpflow.models.SGPR],
+    model: Union[ClusterGP, gpflow.models.SGPR, gpflow.models.GPR],
     max_num_iters: int,
     update_fn: Optional[Callable] = None,
     update_during_training: Optional[int] = None,
@@ -307,7 +307,10 @@ def make_metrics_callback(
 
     @jit(use_jit)
     def train_metrics_full_fn():
-        return model.elbo()
+        if isinstance(model, gpflow.models.GPR):
+            return -model.maximum_log_likelihood_objective()
+        else:
+            return model.elbo()
 
     import click
     import json
@@ -352,6 +355,7 @@ def create_monitor(
     test_data,
     batch_size,
     logdir: Union[str, Path] = "./logs-default/",
+    record_step: Optional[int] = 5,
     use_jit: bool = True,
     use_tensorboard: bool = True,
 ) -> Monitor:
@@ -366,5 +370,5 @@ def create_monitor(
         print_on=True,
     )
     monitor.add_callback("params", param_callback)
-    monitor.add_callback("metrics", metric_callback, record_step=5)
+    monitor.add_callback("metrics", metric_callback, record_step=record_step)
     return monitor

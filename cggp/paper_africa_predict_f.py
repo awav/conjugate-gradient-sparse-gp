@@ -4,7 +4,7 @@ from data import load_data
 import tensorflow as tf
 import numpy as np
 import gpflow
-from utils import store_logs, jit
+from utils import store_as_npy, jit
 from pathlib import Path
 
 from cli_utils import (
@@ -77,9 +77,9 @@ if __name__ == "__main__":
             monitor_batch_size,
         )
 
-        store_logs(Path(Path(f).parent, "train_mean.npy"), np.array(mean_train))
-        store_logs(Path(Path(f).parent, "test_mean.npy"), np.array(mean_test))
-        store_logs(Path(Path(f).parent, "train_variance.npy"), np.array(variance_train))
-        store_logs(Path(Path(f).parent, "test_variance.npy"), np.array(variance_test))
+        store_as_npy(Path(Path(f).parent, "train_mean.npy"), np.array(mean_train))
+        store_as_npy(Path(Path(f).parent, "test_mean.npy"), np.array(mean_test))
+        store_as_npy(Path(Path(f).parent, "train_variance.npy"), np.array(variance_train))
+        store_as_npy(Path(Path(f).parent, "test_variance.npy"), np.array(variance_test))
 
     print(f"End. Check tensorboard logdir {logdir}")

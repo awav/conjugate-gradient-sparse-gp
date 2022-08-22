@@ -8,7 +8,7 @@ import tensorflow as tf
 import numpy as np
 import gpflow
 from gpflow.utilities import parameter_dict
-from utils import store_logs, to_numpy, jit
+from utils import store_as_npy, to_numpy, jit
 from pathlib import Path
 
 from data import DatasetBundle, to_float
@@ -22,6 +22,7 @@ from cli_utils import (
     cggp_class,
     sgpr_class,
     DatasetType,
+    DatasetCallable,
     KernelType,
     LogdirPath,
     FloatType,
@@ -61,7 +62,7 @@ def main(
     jitter: float,
     kernel: Callable,
     seed: int,
-    dataset: DatasetBundle,
+    dataset: DatasetCallable,
     jit: bool,
 ):
     """
@@ -72,10 +73,12 @@ def main(
     gpflow.config.set_default_float(precision)
     gpflow.config.set_default_jitter(jitter)
 
+    data = dataset(seed)
+
     obj = EntryContext(
         seed,
         str(logdir),
-        dataset,
+        data,
         kernel,
         jit,
         jitter,
@@ -114,14 +117,8 @@ def train_adam_covertree(
     use_jit = obj.jit
     logdir = obj.logdir
     kernel_fn = obj.kernel_fn
-    train_data = (
-        to_float(dataset.train[0], as_tensor=True),
-        to_float(dataset.train[1], as_tensor=True),
-    )
-    test_data = (
-        to_float(dataset.test[0], as_tensor=True),
-        to_float(dataset.test[1], as_tensor=True),
-    )
+    train_data = dataset.train
+    test_data = dataset.test
 
     trainable_inducing_points = tip
 
@@ -211,7 +208,7 @@ def train_adam_covertree(
     # Post training procedures
     params = parameter_dict(model)
     params_np = to_numpy(params)
-    store_logs(Path(logdir, "params.npy"), params_np)
+    store_as_npy(Path(logdir, "params.npy"), params_np)
 
     predict_fn = create_predict_fn(model, use_jit=use_jit)
 
@@ -226,10 +223,10 @@ def train_adam_covertree(
         test_batch_size,
     )
 
-    store_logs(Path(logdir, "train_mean.npy"), np.array(mean_train))
-    store_logs(Path(logdir, "test_mean.npy"), np.array(mean_test))
-    store_logs(Path(logdir, "train_variances.npy"), np.array(variances_train))
-    store_logs(Path(logdir, "test_variances.npy"), np.array(variances_test))
+    store_as_npy(Path(logdir, "train_mean.npy"), np.array(mean_train))
+    store_as_npy(Path(logdir, "test_mean.npy"), np.array(mean_test))
+    store_as_npy(Path(logdir, "train_variances.npy"), np.array(variances_train))
+    store_as_npy(Path(logdir, "test_variances.npy"), np.array(variances_test))
     click.echo("⭐⭐⭐ Script finished ⭐⭐⭐")
 
 

@@ -6,22 +6,29 @@ import gpflow
 import numpy as np
 import tensorflow as tf
 
-from kmeans import kmeans_lloyd
-from oips import oips
+from selection import kmeans_lloyd, oips, uniform
 from distance import create_distance_fn, DistanceType
 from optimize import (
     kmeans_update_inducing_parameters,
     covertree_update_inducing_parameters,
     oips_update_inducing_parameters,
 )
-from data import load_data
+from data import load_data, DatasetBundle
 from utils import jit, transform_to_dataset
 from models import LpSVGP, ClusterGP, CGGP
 from conjugate_gradient import ConjugateGradient
 
 
 ModelClass = TypeVar("ModelClass", type(LpSVGP), type(ClusterGP))
-ClusteringType = Literal["kmeans", "covertree", "oips"]
+ModelClassCallable = Callable
+ClusteringType = Literal["kmeans", "covertree", "oips", "uniform"]
+DatasetCallable = Callable[[int], DatasetBundle]
+
+PrecisionName = Literal["fp32", "fp64"]
+PrecisionDtype = Literal[np.float32, np.float64]
+DistanceChoices = click.Choice(DistanceType.__args__)
+ModelChoices = click.Choice(ModelClass.__args__)
+PrecisionNames: Dict[PrecisionDtype, PrecisionName] = {np.float32: "fp32", np.float64: "fp64"}
 
 
 class FloatType(click.ParamType):
@@ -72,8 +79,10 @@ class DatasetType(click.ParamType):
             self.fail(f"{value} dataset is not supported", param, ctx)
         try:
             dataname = value
-            data = load_data(dataname, as_tensor=True)
-            return data
+            def load_data_fn(seed: int, as_tensor: bool = True):
+                data = load_data(dataname, as_tensor=as_tensor, seed=seed)
+                return data
+            return load_data_fn
         except Exception:
             self.fail(f"Error occured during loading {value} dataset", param, ctx)
 
@@ -139,6 +148,25 @@ def create_model(
     model = model_fn(kernel, likelihood, iv, num_data=n, **model_kwargs)
 
     return model
+
+
+def create_gpr_model(
+    train_data,
+    kernel_fn: Callable,
+    **model_kwargs,
+):
+    x = np.array(train_data[0])
+    n = x.shape[0]
+    dim = x.shape[-1]
+    default_variance = 0.1
+    dtype = x.dtype
+
+    kernel = kernel_fn(dim)
+    model_fn = gpflow.models.GPR
+    model = model_fn(train_data, kernel, noise_variance=default_variance, **model_kwargs)
+
+    return model
+
 
 
 def create_kmeans_update_fn(
@@ -212,6 +240,35 @@ def create_oips_update_fn(
     return update_fn
 
 
+def create_uniform_update_fn(
+    model,
+    data,
+    max_points: int,
+    use_jit: bool = True,
+    distance_type: DistanceType = "covariance",
+):
+    """
+    By default method will use half of the size of
+    dataset for the number of inducing points.
+    """
+
+    distance_fn = create_distance_fn(model.kernel, distance_type)
+    distance_fn = jit(use_jit)(distance_fn)
+
+    if max_points > tf.shape(data[0])[0]:
+        raise ValueError("Max points cannot be larger the dataset size")
+
+    @jit(use_jit)
+    def uniform_fn(inputs):
+        return uniform(inputs, max_points)
+
+    @jit(use_jit)
+    def update_fn():
+        return oips_update_inducing_parameters(model, data, uniform_fn, distance_fn)
+
+    return update_fn
+
+
 def create_update_fn(
     clustering_type: ClusteringType,
     model,
@@ -230,6 +287,10 @@ def create_update_fn(
         )
     elif clustering_type == "oips":
         return create_oips_update_fn(
+            model, data, use_jit=use_jit, distance_type=distance_type, **clustering_kwargs
+        )
+    elif clustering_type == "uniform":
+        return create_uniform_update_fn(
             model, data, use_jit=use_jit, distance_type=distance_type, **clustering_kwargs
         )
     raise ValueError(f"Unknown value for {clustering_type}")
@@ -309,3 +370,31 @@ def cggp_class(kernel, likelihood, iv, error_threshold: float = 1e-6, **kwargs):
 def sgpr_class(train_data, kernel, likelihood, iv, **kwargs):
     noise_variance = likelihood.variance
     return gpflow.models.SGPR(train_data, kernel, iv, noise_variance=noise_variance)
+
+
+def gpr_class(train_data, kernel, likelihood, **kwargs):
+    noise_variance = likelihood.variance
+    model = gpflow.models.GPR(train_data, kernel, noise_variance=noise_variance)
+    return model
+
+
+def kernel_to_name(kernel: gpflow.kernels.Kernel) -> str:
+    if isinstance(kernel,  gpflow.kernels.SquaredExponential):
+        return "se"
+    elif isinstance(kernel, gpflow.kernels.Matern12):
+        return "matern12"
+    elif isinstance(kernel, gpflow.kernels.Matern32):
+        return "matern32"
+    raise NotImplementedError(f"Unknown kernel {kernel}")
+
+
+def name_to_kernel(name: str, dim: int = 1):
+    lengthscales = [0.1] * dim
+    if name == "se":
+        return gpflow.kernels.SquaredExponential(lengthscales=lengthscales)
+    elif name == "matern12":
+        return gpflow.kernels.Matern12(lengthscales=lengthscales)
+    elif name == "matern32":
+        return gpflow.kernels.Matern32(lengthscales=lengthscales)
+    raise NotImplementedError(f"Unknown kernel name {name}")
+    

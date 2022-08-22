@@ -1,4 +1,4 @@
-from kmeans import kmeans_indices_and_distances
+from selection import kmeans_indices_and_distances
 from models import ClusterGP, CGGP
 from conjugate_gradient import ConjugateGradient
 from data import snelson1d, load_data
