@@ -254,6 +254,30 @@ def train_adam(
         logdir=logdir,
     )
 
+    m = int(model.inducing_variable.num_inducing)
+    info = {
+        "seed": obj.seed,
+        "dataset_name": obj.dataset.name,
+        "num_inducing_points": m,
+        "num_iterations": num_iterations,
+        "use_jit": use_jit,
+        "jitter": obj.jitter,
+        "precision": obj.precision,
+        "learning_rate": learning_rate,
+        "logdir": logdir,
+        "batch_size": batch_size,
+        "train_size": train_data[0].shape[0],
+        "test_size": test_data[0].shape[0],
+        "input_dimension": train_data[0].shape[-1],
+        "clustering_type": clustering_type,
+        "distance_type": distance_type,
+        "model_class": obj.model_class,
+        "trainable_inducing_points": trainable_inducing_points,
+    }
+    info_str = json.dumps(info, indent=2)
+    click.echo(f"-> {info_str}")
+
+    # Run hyperparameter tuning
     click.echo("★★★ Start training ★★★")
     update_fn()
     train_using_adam_and_update(
@@ -287,29 +311,6 @@ def train_adam(
         test_data,
         test_batch_size,
     )
-
-    m = int(model.inducing_variable.num_inducing)
-    info = {
-        "seed": obj.seed,
-        "dataset_name": obj.dataset.name,
-        "num_inducing_points": m,
-        "num_iterations": num_iterations,
-        "use_jit": use_jit,
-        "jitter": obj.jitter,
-        "precision": obj.precision,
-        "learning_rate": learning_rate,
-        "logdir": logdir,
-        "batch_size": batch_size,
-        "train_size": train_data[0].shape[0],
-        "test_size": test_data[0].shape[0],
-        "input_dimension": train_data[0].shape[-1],
-        "clustering_type": clustering_type,
-        "distance_type": distance_type,
-        "model_class": obj.model_class,
-        "trainable_inducing_points": trainable_inducing_points,
-    }
-    info_str = json.dumps(info, indent=2)
-    click.echo(f"-> {info_str}")
 
     store_logs(Path(logdir, "train_mean.npy"), np.array(mean_train))
     store_logs(Path(logdir, "test_mean.npy"), np.array(mean_test))

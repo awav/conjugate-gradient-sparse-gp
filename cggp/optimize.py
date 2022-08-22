@@ -48,7 +48,7 @@ def oips_update_inducing_parameters(
     inputs, outputs = data
     iv = oips_fn(inputs)
     m = tf.shape(iv)[0]
-    cross_distances = distance_fn((iv, data))
+    cross_distances = model.kernel(iv, inputs)
     max_distance_indices = tf.argmax(cross_distances, axis=0)
 
     def mean_and_count_fn(label: int) -> Tuple[Tensor, Tensor]:
@@ -63,7 +63,7 @@ def oips_update_inducing_parameters(
     means, counts = tf.map_fn(
         mean_and_count_fn,
         labels,
-        fn_output_signature=(data.dtype, labels.dtype),
+        fn_output_signature=(inputs.dtype, labels.dtype),
     )
 
     nonempty_clusters = counts != 0
@@ -278,7 +278,14 @@ def make_param_callback(model):
     return _callback
 
 
-def make_metrics_callback(model, train_data, test_data, batch_size: int, use_jit: bool = True):
+def make_metrics_callback(
+    model,
+    train_data,
+    test_data,
+    batch_size: int,
+    use_jit: bool = True,
+    print_on: bool = True,
+):
     """
     Callback for computing test metrics (RMSE and NLPD)
     """
@@ -302,6 +309,9 @@ def make_metrics_callback(model, train_data, test_data, batch_size: int, use_jit
     def train_metrics_full_fn():
         return model.elbo()
 
+    import click
+    import json
+
     def step_callback(step, *args, **kwargs):
         error = np.array([]).reshape(-1, 1)
         lpd = 0.0
@@ -321,7 +331,17 @@ def make_metrics_callback(model, train_data, test_data, batch_size: int, use_jit
 
         rmse = np.sqrt(np.mean(error**2))
         nlpd = -lpd
-        return {"train/elbo": elbo, "test/rmse": rmse, "test/nlpd": nlpd}
+        metrics = {"train/elbo": elbo, "test/rmse": rmse, "test/nlpd": nlpd}
+
+        if print_on:
+            metrics_fmt = {
+                k: np.format_float_scientific(v, precision=4) for k, v in metrics.items()
+            }
+            metrics_str = json.dumps(metrics_fmt)
+            click.echo(f"Step [{step}], metrics: {metrics_str}")
+
+        tf.debugging.check_numerics(elbo, f"The training ELBO has got an undefined value {elbo}")
+        return metrics
 
     return step_callback
 
@@ -336,12 +356,15 @@ def create_monitor(
     use_tensorboard: bool = True,
 ) -> Monitor:
     monitor = Monitor(logdir, use_tensorboard=use_tensorboard)
-    print_callback = make_print_callback()
     param_callback = make_param_callback(model)
     metric_callback = make_metrics_callback(
-        model, train_data, test_data, batch_size, use_jit=use_jit
+        model,
+        train_data,
+        test_data,
+        batch_size,
+        use_jit=use_jit,
+        print_on=True,
     )
-    monitor.add_callback("print", print_callback)
     monitor.add_callback("params", param_callback)
     monitor.add_callback("metrics", metric_callback, record_step=5)
     return monitor

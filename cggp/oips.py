@@ -18,7 +18,6 @@ def oips(kernel: gpflow.kernels.Kernel, inputs: Tensor, rho: float, max_points: 
 
     def body(i, j, inducing_points):
         point = inputs[i : i + 1]
-        inducing_points = inducing_points
         kix = kernel(point, inducing_points)
         weight = tf.math.reduce_max(kix)
         if weight < rho:
@@ -26,7 +25,7 @@ def oips(kernel: gpflow.kernels.Kernel, inputs: Tensor, rho: float, max_points: 
             return [i + 1, j + 1, inducing_points]
         return [i + 1, j, inducing_points]
 
-    i0 = tf.constant(0)
+    i0 = tf.constant(1)
     j0 = tf.constant(1)
     initial_state = [i0, j0, inducing_points]
     shapes = [i0.shape, j0.shape, tf.TensorShape([None, inputs.shape[-1]])]
