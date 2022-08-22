@@ -144,5 +144,30 @@
                 "--no-tensorboard"
             ],
         },
+        {
+            "name": "Test GPR",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/cggp/paper_cli_gpr.py",
+            "console": "integratedTerminal",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}:${workspaceFolder}/cggp/:${env:PYTHONPATH}",
+                "CUDA_DEVICE_ORDER": "PCI_BUS_ID",
+                "CUDA_VISIBLE_DEVICES": "3",
+            },
+            "justMyCode": false,
+            "args": [
+                "--dataset",
+                "elevators",
+                "--seed",
+                "111",
+                "--no-jit",
+                "--num-iterations",
+                "2",
+                "--test-batch-size",
+                "2000",
+                "--no-tensorboard"
+            ],
+        },
     ]
 }

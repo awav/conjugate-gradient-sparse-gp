@@ -1,19 +1,16 @@
 from dataclasses import dataclass
-from email.policy import default
-from typing import Literal, Union, Callable, Optional, Dict
+from typing import Literal, Union, Callable, Dict
 import json
 import click
 from cli_utils import ModelClass
-from models import CGGP
-from data import load_data
 import tensorflow as tf
 import numpy as np
 import gpflow
 from gpflow.utilities import parameter_dict
-from utils import store_logs, to_numpy
+from utils import store_as_npy, to_numpy
 from pathlib import Path
 
-from data import DatasetBundle, Dataset, to_float
+from data import DatasetBundle, Dataset
 from distance import DistanceType
 
 from cli_utils import (
@@ -23,9 +20,14 @@ from cli_utils import (
     cggp_class,
     sgpr_class,
     DatasetType,
+    DatasetCallable,
     KernelType,
     LogdirPath,
     FloatType,
+    PrecisionName,
+    PrecisionNames,
+    DistanceChoices,
+    ModelChoices,
 )
 
 from optimize import (
@@ -33,12 +35,6 @@ from optimize import (
     train_using_lbfgs_and_update,
     create_monitor,
 )
-
-
-PrecisionName = Literal["fp32", "fp64"]
-__model_types = click.Choice(["sgpr", "cdgp"])
-__distance_types = click.Choice(["euclidean", "covariance", "correlation"])
-__precision_names: Dict[np.dtype, PrecisionName] = {np.float32: "fp32", np.float64: "fp64"}
 
 
 @dataclass
@@ -59,7 +55,7 @@ class MainContext:
 
 @click.group()
 @click.option("-d", "--dataset", type=DatasetType(), required=True)
-@click.option("-mc", "--model-class", type=__model_types, required=True)
+@click.option("-mc", "--model-class", type=ModelChoices, required=True)
 @click.option("-p", "--precision", type=FloatType(), default="fp64")
 @click.option("-j", "--jitter", type=float, default=1e-6)
 @click.option("-k", "--kernel", type=KernelType(), default="se")
@@ -75,7 +71,7 @@ def main(
     jitter: float,
     kernel: Callable,
     seed: int,
-    dataset: DatasetBundle,
+    dataset: DatasetCallable,
     jit: bool,
     model_class: ModelClass,
     error_threshold: float,
@@ -88,14 +84,10 @@ def main(
     gpflow.config.set_default_float(precision)
     gpflow.config.set_default_jitter(jitter)
 
-    train_data = (
-        to_float(dataset.train[0], as_tensor=True),
-        to_float(dataset.train[1], as_tensor=True),
-    )
-    test_data = (
-        to_float(dataset.test[0], as_tensor=True),
-        to_float(dataset.test[1], as_tensor=True),
-    )
+    data = dataset(seed)
+
+    train_data = data.train
+    test_data = data.test
 
     def sgpr_class_wrapper(*args, **kwargs):
         return sgpr_class(train_data, *args, **kwargs)
@@ -110,14 +102,14 @@ def main(
         seed,
         str(logdir),
         model_class,
-        dataset,
+        data,
         train_data,
         test_data,
         kernel,
         model_class_fn,
         jit,
         jitter,
-        __precision_names[precision],
+        PrecisionNames[precision],
         extra_obj=dict(),
     )
     ctx.obj = obj
@@ -125,7 +117,7 @@ def main(
 
 @main.group("covertree")
 @click.option("-s", "--spatial-resolution", type=float, required=True)
-@click.option("-d", "--distance-type", type=__distance_types, default="euclidean")
+@click.option("-d", "--distance-type", type=DistanceChoices, default="euclidean")
 @click.pass_context
 def covertree(ctx: click.Context, spatial_resolution: float, distance_type: DistanceType):
     obj: MainContext = ctx.obj
@@ -153,7 +145,7 @@ def covertree(ctx: click.Context, spatial_resolution: float, distance_type: Dist
 
 @main.group("kmeans")
 @click.option("-m", "--max-num-ip", type=int, required=True)
-@click.option("-d", "--distance-type", type=__distance_types, default="euclidean")
+@click.option("-d", "--distance-type", type=DistanceChoices, default="euclidean")
 @click.pass_context
 def kmeans(ctx: click.Context, max_num_ip: int, distance_type: DistanceType):
     obj: MainContext = ctx.obj
@@ -182,7 +174,7 @@ def kmeans(ctx: click.Context, max_num_ip: int, distance_type: DistanceType):
 @main.group("oips")
 @click.option("-r", "--rho", type=float, required=True)
 @click.option("-m", "--max-num-ip", type=int, required=True)
-@click.option("-d", "--distance-type", type=__distance_types, default="euclidean")
+@click.option("-d", "--distance-type", type=DistanceChoices, default="euclidean")
 @click.pass_context
 def oips(ctx: click.Context, rho: float, max_num_ip: int, distance_type: DistanceType):
     obj: MainContext = ctx.obj
@@ -211,7 +203,6 @@ def oips(ctx: click.Context, rho: float, max_num_ip: int, distance_type: Distanc
 @click.command("train-adam")
 @click.option("-n", "--num-iterations", type=int, required=True)
 @click.option("-b", "--batch-size", type=int)
-@click.option("-tb", "--test-batch-size", type=int)
 @click.option("-l", "--learning-rate", type=float, default=0.01)
 @click.option("--tip/--no-tip", type=bool, default=False)
 @click.option("--tensorboard/--no-tensorboard", type=bool, default=True)
@@ -272,7 +263,7 @@ def train_adam(
     # Post training procedures
     params = parameter_dict(model)
     params_np = to_numpy(params)
-    store_logs(Path(logdir, "params.npy"), params_np)
+    store_as_npy(Path(logdir, "params.npy"), params_np)
 
     predict_fn = create_predict_fn(model, use_jit=use_jit)
 
@@ -311,10 +302,10 @@ def train_adam(
     info_str = json.dumps(info, indent=2)
     click.echo(f"-> {info_str}")
 
-    store_logs(Path(logdir, "train_mean.npy"), np.array(mean_train))
-    store_logs(Path(logdir, "test_mean.npy"), np.array(mean_test))
-    store_logs(Path(logdir, "train_variances.npy"), np.array(variances_train))
-    store_logs(Path(logdir, "test_variances.npy"), np.array(variances_test))
+    store_as_npy(Path(logdir, "train_mean.npy"), np.array(mean_train))
+    store_as_npy(Path(logdir, "test_mean.npy"), np.array(mean_test))
+    store_as_npy(Path(logdir, "train_variances.npy"), np.array(variances_train))
+    store_as_npy(Path(logdir, "test_variances.npy"), np.array(variances_test))
     click.echo("⭐⭐⭐ Script finished ⭐⭐⭐")
 
 

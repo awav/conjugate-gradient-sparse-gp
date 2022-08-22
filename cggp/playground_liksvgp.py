@@ -1,4 +1,4 @@
-from kmeans import kmeans_indices_and_distances
+from selection import kmeans_indices_and_distances
 from models import LpSVGP, ClusterGP
 from data import snelson1d
 import matplotlib.pyplot as plt

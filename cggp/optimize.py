@@ -1,3 +1,4 @@
+from optparse import Option
 from pathlib import Path
 from typing import Callable, Optional, Union, Tuple
 import numpy as np
@@ -5,7 +6,7 @@ import tensorflow as tf
 import gpflow
 from gpflow.utilities import parameter_dict
 import tensorflow as tf
-from kmeans import kmeans_indices_and_distances
+from selection import kmeans_indices_and_distances
 
 from covertree import ModifiedCoverTree, SiblingAwareCoverTree
 from models import ClusterGP, LpSVGP
@@ -148,7 +149,7 @@ def train_vanilla_using_lbfgs(
 
 def train_using_lbfgs_and_update(
     data,
-    model: Union[ClusterGP, gpflow.models.SGPR],
+    model: Union[ClusterGP, gpflow.models.SGPR, gpflow.models.GPR],
     max_num_iters: int,
     update_fn: Optional[Callable] = None,
     update_during_training: Optional[int] = None,
@@ -300,9 +301,12 @@ def make_metrics_callback(model, train_data, test_data, batch_size: int, use_jit
 
     @jit(use_jit)
     def train_metrics_full_fn():
-        return model.elbo()
+        if isinstance(model, gpflow.models.GPR):
+            return -model.maximum_log_likelihood_objective()
+        else:
+            return model.elbo()
 
-    def step_callback(step, *args, **kwargs):
+    def step_callback(*args, **kwargs):
         error = np.array([]).reshape(-1, 1)
         lpd = 0.0
         elbo = 0.0
@@ -332,6 +336,7 @@ def create_monitor(
     test_data,
     batch_size,
     logdir: Union[str, Path] = "./logs-default/",
+    record_step: Optional[int] = 5,
     use_jit: bool = True,
     use_tensorboard: bool = True,
 ) -> Monitor:
@@ -343,5 +348,5 @@ def create_monitor(
     )
     monitor.add_callback("print", print_callback)
     monitor.add_callback("params", param_callback)
-    monitor.add_callback("metrics", metric_callback, record_step=5)
+    monitor.add_callback("metrics", metric_callback, record_step=record_step)
     return monitor
