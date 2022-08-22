@@ -20,6 +20,7 @@ from conjugate_gradient import ConjugateGradient
 
 
 ModelClass = TypeVar("ModelClass", type(LpSVGP), type(ClusterGP))
+ModelClassStr = Literal["sgpr", "cdgp"]
 ModelClassCallable = Callable
 ClusteringType = Literal["kmeans", "covertree", "oips", "uniform"]
 DatasetCallable = Callable[[int], DatasetBundle]
@@ -27,7 +28,7 @@ DatasetCallable = Callable[[int], DatasetBundle]
 PrecisionName = Literal["fp32", "fp64"]
 PrecisionDtype = Literal[np.float32, np.float64]
 DistanceChoices = click.Choice(DistanceType.__args__)
-ModelChoices = click.Choice(ModelClass.__args__)
+ModelChoices = click.Choice(ModelClassStr.__args__)
 PrecisionNames: Dict[PrecisionDtype, PrecisionName] = {np.float32: "fp32", np.float64: "fp64"}
 
 
@@ -64,6 +65,7 @@ class DatasetType(click.ParamType):
     datasets: List[str] = [
         "snelson1d",
         "elevators",
+        "bike",
         "pol",
         "houseelectric",
         "3droad",
@@ -152,7 +154,7 @@ def create_model(
 
 def create_gpr_model(
     train_data,
-    kernel_fn: Callable,
+    _kernel_fn: Callable,  # TODO(awav): we use the same kernel for all experiments
     **model_kwargs,
 ):
     x = np.array(train_data[0])
@@ -299,7 +301,8 @@ def create_update_fn(
 def kernel_fn(dim):
     lengthscale = [1.0] * dim
     variance = 0.1
-    kernel = gpflow.kernels.SquaredExponential(variance=variance, lengthscales=lengthscale)
+    # kernel = gpflow.kernels.SquaredExponential(variance=variance, lengthscales=lengthscale)
+    kernel = gpflow.kernels.Matern32(variance=variance, lengthscales=lengthscale)
     return kernel
 
 

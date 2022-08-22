@@ -1,0 +1,20 @@
+cmd = 'python ./paper_cli_gpr.py -l "{uid}" -d {dataset} -k {kernel} -s {seed} --jit -n {maxiters} -tb {test_batchsize} --tensorboard'
+
+# GPR
+[[exp]]
+cmd = '{cmd}'
+uid = './{rootdir}/{dataset}/gpr_{kernel}_i{maxiters}/{seed}'
+
+name = "gpr"
+rootdir = "logs/gpr"
+dataset = ["elevators", "bike"]
+maxiters = 1000
+kernel = "matern32"
+test_batchsize = 2000
+seed = [111]
+
+
+[flags]
+restart = false
+num_proc = 2
+gpu_indices = ["1", "3"]

@@ -19,6 +19,7 @@ from cli_utils import (
 )
 
 from optimize import (
+    make_metrics_callback,
     train_using_lbfgs_and_update,
     create_monitor,
 )
@@ -49,7 +50,6 @@ def main(
     This is a core command for all CLI functions.
     """
     use_jit = jit
-    use_tb = tensorboard
     np.random.seed(seed)
     tf.random.set_seed(seed)
 
@@ -65,7 +65,7 @@ def main(
         test_data,
         test_batch_size,
         record_step=record_step,
-        use_tensorboard=use_tb,
+        use_tensorboard=tensorboard,
         logdir=logdir,
     )
 
@@ -74,7 +74,7 @@ def main(
 
     info = {
         "seed": seed,
-        "dataset_name": dataset.name,
+        "dataset_name": data.name,
         "num_iterations": num_iterations,
         "kernel": kernel_to_name(model.kernel),
         "use_jit": use_jit,
@@ -88,15 +88,17 @@ def main(
     click.echo(f"-> {info_str}")
 
     click.echo("★★★ Start training ★★★")
-    train_using_lbfgs_and_update(
-        train_data,
-        model,
-        num_iterations,
-        update_fn=None,
-        update_during_training=None,
-        monitor=monitor,
-        use_jit=use_jit,
-    )
+
+    for _ in range(2):
+        train_using_lbfgs_and_update(
+            train_data,
+            model,
+            num_iterations,
+            update_fn=None,
+            update_during_training=None,
+            monitor=monitor,
+            use_jit=use_jit,
+        )
     click.echo("✪✪✪ Training finished ✪✪✪")
 
     params = parameter_dict(model)
@@ -105,24 +107,17 @@ def main(
     store_as_json(Path(logdir, "info.json"), info)
     store_as_npy(Path(logdir, "params.npy"), params_np)
 
-    predict_fn = create_predict_fn(model, use_jit=use_jit)
-
-    mean_train, variances_train = batch_posterior_computation(
-        predict_fn,
+    metrics_fn = make_metrics_callback(
+        model,
         train_data,
-        test_batch_size,
-    )
-
-    mean_test, variances_test = batch_posterior_computation(
-        predict_fn,
         test_data,
-        test_batch_size,
+        batch_size=test_batch_size,
+        use_jit=use_jit,
+        print_on=True,
     )
 
-    store_as_npy(Path(logdir, "train_mean.npy"), np.array(mean_train))
-    store_as_npy(Path(logdir, "test_mean.npy"), np.array(mean_test))
-    store_as_npy(Path(logdir, "train_variances.npy"), np.array(variances_train))
-    store_as_npy(Path(logdir, "test_variances.npy"), np.array(variances_test))
+    metrics = metrics_fn(0)
+    store_as_json(Path(logdir, "results.json"), metrics)
 
     click.echo("⭐⭐⭐ Script finished ⭐⭐⭐")
 

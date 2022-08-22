@@ -156,7 +156,7 @@ def train_using_lbfgs_and_update(
     use_jit: bool = True,
 ):
     lbfgs = gpflow.optimizers.Scipy()
-    options = dict(maxiter=max_num_iters)
+    options = dict(maxiter=max_num_iters, disp=True)
 
     if isinstance(model, gpflow.models.InternalDataTrainingLossMixin):
         loss_fn = model.training_loss_closure(compile=False)
@@ -320,10 +320,12 @@ def make_metrics_callback(
         lpd = 0.0
         elbo = 0.0
 
+        n = 0
         for batch in test_dataset:
             batch_error, batch_log_density = test_metrics_fn(batch)
             lpd += batch_log_density.numpy()
             error = np.concatenate([error, batch_error.numpy()], axis=0)
+            n += batch_error.shape[0]
 
         if isinstance(model, gpflow.models.InternalDataTrainingLossMixin):
             elbo = train_metrics_full_fn().numpy()
@@ -333,7 +335,7 @@ def make_metrics_callback(
                 elbo += batch_elbo.numpy()
 
         rmse = np.sqrt(np.mean(error**2))
-        nlpd = -lpd
+        nlpd = -lpd / n
         metrics = {"train/elbo": elbo, "test/rmse": rmse, "test/nlpd": nlpd}
 
         if print_on:

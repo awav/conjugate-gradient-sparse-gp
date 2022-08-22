@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import Literal, Union, Callable, Dict
 import json
 import click
-from cli_utils import ModelClass
+from cli_utils import ModelClass, ModelClassStr
 import tensorflow as tf
 import numpy as np
 import gpflow
@@ -27,6 +27,7 @@ from cli_utils import (
     PrecisionName,
     PrecisionNames,
     DistanceChoices,
+    ModelClassStr,
     ModelChoices,
 )
 
@@ -41,7 +42,7 @@ from optimize import (
 class MainContext:
     seed: int
     logdir: Union[Path, str]
-    model_class: Literal["sgpr", "cdgp"]
+    model_class: ModelClassStr 
     dataset: DatasetBundle
     train_data: Dataset
     test_data: Dataset

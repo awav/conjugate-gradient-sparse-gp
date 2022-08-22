@@ -9,7 +9,7 @@ from utils import store_as_json, load_from_json, load_from_npy
 from pathlib import Path
 
 from cli_utils import (
-    ModelClass,
+    ModelClassStr,
     DatasetType,
     DatasetCallable,
     FloatType,
@@ -39,15 +39,13 @@ def model_fn_choices(train_data, error_threshold: float = 1e-6):
 @click.option("-p", "--precision", type=FloatType(), required=True)
 @click.option("-j", "--jitter", type=float, required=True)
 @click.option("-c", "--config_dir", type=LogdirPath(), required=True)
-@click.option("-s", "--seed", type=int, default=0)
 @click.option("--jit/--no-jit", type=bool, default=True)
 @click.option("--tensorboard/--no-tensorboard", type=bool, default=False)
 @click.pass_context
 def main(
     ctx: click.Context,
-    seed: int,
     cfgdir: Path,
-    model_class: ModelClass,
+    model_class: ModelClassStr,
     precision: tf.DType,
     jitter: float,
     jit: bool,
@@ -56,14 +54,17 @@ def main(
     """
     This is a core command for all CLI functions.
     """
-    np.random.seed(seed)
-    tf.random.set_seed(seed)
     gpflow.config.set_default_float(precision)
     gpflow.config.set_default_jitter(jitter)
 
     # Reference model
     ref_info = load_from_json(Path(cfgdir, "info.json"))
     ref_params = load_from_npy(Path(cfgdir, "params.npy"))
+
+    seed: int = ref_info["seed"]
+
+    np.random.seed(seed)
+    tf.random.set_seed(seed)
 
     dataset_name = ref_info["dataset_name"]
     kernel_name = ref_info["kernel_name"]
