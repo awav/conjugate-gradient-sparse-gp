@@ -100,7 +100,7 @@ def oips(kernel: gpflow.kernels.Kernel, inputs: Tensor, rho: float, max_points: 
 
 
 def uniform(inputs: Tensor, max_points: int) -> Tensor:
-    n = tf.shape(inputs)[0]
-    indices = tf.random.uniform([max_points], maxval=n)
-    sample = inputs[indices]
+    max_value = tf.shape(inputs)[0]
+    indices = tf.random.uniform([max_points], maxval=max_value, dtype=max_value.dtype)
+    sample = tf.gather(inputs, indices, axis=0)
     return sample

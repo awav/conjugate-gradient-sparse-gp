@@ -3,7 +3,7 @@ from typing import Callable, Optional, Union, Tuple
 import numpy as np
 import tensorflow as tf
 import gpflow
-from gpflow.utilities import parameter_dict
+from gpflow.utilities import parameter_dict, ops
 import tensorflow as tf
 from selection import kmeans_indices_and_distances
 
@@ -48,8 +48,8 @@ def oips_update_inducing_parameters(
     inputs, outputs = data
     iv = oips_fn(inputs)
     m = tf.shape(iv)[0]
-    cross_distances = model.kernel(iv, inputs)
-    max_distance_indices = tf.argmax(cross_distances, axis=0)
+    cross_distances = ops.square_distance(iv, inputs)
+    max_distance_indices = tf.argmin(cross_distances, axis=0)
 
     def mean_and_count_fn(label: int) -> Tuple[Tensor, Tensor]:
         mask = max_distance_indices == label
@@ -67,9 +67,14 @@ def oips_update_inducing_parameters(
     )
 
     nonempty_clusters = counts != 0
-    new_means = tf.boolean_mask(means, nonempty_clusters)
-    new_counts = tf.boolean_mask(counts, nonempty_clusters)
-    new_iv = tf.boolean_mask(iv, nonempty_clusters)
+
+    new_counts = tf.where(nonempty_clusters, counts, tf.ones_like(counts))
+    new_iv = iv
+    new_means = means
+
+    # new_means = tf.boolean_mask(means, nonempty_clusters)
+    # new_counts = tf.boolean_mask(counts, nonempty_clusters)
+    # new_iv = tf.boolean_mask(iv, nonempty_clusters)
 
     return new_iv, new_means, new_counts
 
@@ -296,7 +301,7 @@ def make_metrics_callback(
     def test_metrics_fn(data):
         x, y = data
         mu, var = model.predict_f(x)
-        lpd = model.likelihood.predict_log_density(mu, var, y)
+        lpd = model.likelihood.predict_log_density(x, mu, var, y)
         lpd = tf.reduce_sum(lpd)
         error = y - mu
         return error, lpd
