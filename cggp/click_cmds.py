@@ -28,6 +28,7 @@ def covertree(ctx: click.Context, spatial_resolution: float, distance_type: Dist
         model=model,
         update_fn=update_fn,
         clustering_type=clustering_type,
+        clustering_kwargs=clustering_kwargs,
         distance_type=distance_type,
     )
 
@@ -56,13 +57,14 @@ def kmeans(ctx: click.Context, max_num_ip: int, distance_type: DistanceType):
         model=model,
         update_fn=update_fn,
         clustering_type=clustering_type,
+        clustering_kwargs=clustering_kwargs,
         distance_type=distance_type,
     )
 
 
 @click.group("oips")
 @click.option("-r", "--rho", type=float, required=True)
-@click.option("-m", "--max-num-ip", type=int, required=True)
+@click.option("-m", "--max-num-ip", type=int)
 @click.option("-d", "--distance-type", type=DistanceChoices, default="euclidean")
 @click.pass_context
 def oips(ctx: click.Context, rho: float, max_num_ip: int, distance_type: DistanceType):
@@ -85,6 +87,7 @@ def oips(ctx: click.Context, rho: float, max_num_ip: int, distance_type: Distanc
         model=model,
         update_fn=update_fn,
         clustering_type=clustering_type,
+        clustering_kwargs=clustering_kwargs,
         distance_type=distance_type,
     )
 
@@ -113,5 +116,6 @@ def uniform(ctx: click.Context, max_num_ip: int, distance_type: DistanceType):
         model=model,
         update_fn=update_fn,
         clustering_type=clustering_type,
+        clustering_kwargs=clustering_kwargs,
         distance_type=distance_type,
     )

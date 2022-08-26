@@ -19,13 +19,13 @@ from cli_utils import (
     batch_posterior_computation,
     cggp_class,
     sgpr_class,
+    precision_names,
     DatasetType,
     DatasetCallable,
     KernelType,
     LogdirPath,
     FloatType,
     PrecisionName,
-    PrecisionNames,
     DistanceChoices,
     ModelClassStr,
     ModelChoices,
@@ -110,7 +110,7 @@ def main(
         model_class_fn,
         jit,
         jitter,
-        PrecisionNames[precision],
+        precision_names[precision],
         extra_obj=dict(),
     )
     ctx.obj = obj

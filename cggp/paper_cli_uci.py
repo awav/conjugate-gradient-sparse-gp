@@ -1,6 +1,4 @@
-from dataclasses import dataclass
-from typing import Literal, Optional, Union, Callable, Dict
-import json
+from typing import Union, Dict, Literal
 import click
 import tensorflow as tf
 import numpy as np
@@ -11,6 +9,7 @@ from pathlib import Path
 from cli_utils import (
     sgpr_class,
     cggp_class,
+    precision_names,
     ModelClassStr,
     DatasetType,
     DatasetCallable,
@@ -75,11 +74,16 @@ def main(
     model_class_fn = model_fn_choices(dataset.train)[model_class]
 
     common_ctx = dict(
-        config_dir=config_dir,
+        seed=seed,
+        dataset_name=dataset_name,
+        config_dir=str(config_dir),
+        model_class=model_class,
         model_class_fn=model_class_fn,
         ref_info=ref_info,
         ref_params=ref_params,
         dataset=dataset,
+        jitter=jitter,
+        precision=precision_names[precision],
         jit=jit,
     )
 
@@ -98,6 +102,7 @@ def compute_metrics(ctx: click.Context, logdir: Path, test_batch_size: Union[int
     dataset = common_ctx["dataset"]
     model = ip_ctx["model"]
     update_ip_fn = ip_ctx["update_fn"]
+    jitter = common_ctx["jitter"]
 
     if test_batch_size is None:
         test_batch_size: int = dataset.test[0].shape[0]
@@ -110,13 +115,37 @@ def compute_metrics(ctx: click.Context, logdir: Path, test_batch_size: Union[int
         use_jit=use_jit,
     )
 
+    info = {
+        "model": common_ctx["model_class"],
+        "dataset": common_ctx["dataset_name"],
+        "jitter": common_ctx["jitter"],
+        "precision": common_ctx["precision"],
+        "jit": common_ctx["jit"],
+        "config_dir": common_ctx["config_dir"],
+        "clustering_type": ip_ctx["clustering_type"],
+        "clustering_args": ip_ctx["clustering_kwargs"],
+    }
+
     update_ip_fn()
     metrics = metrics_fn(-1)
     m = int(model.inducing_variable.num_inducing)
-    results = {**metrics, **{"num_inducing_points": m}}
+    properties = matrix_properties(model, jitter)
+    results = {**info, **metrics, **properties, **{"num_inducing_points": m}}
 
     store_as_json(Path(logdir, "results.json"), results)
     click.echo("⭐⭐⭐ Script finished ⭐⭐⭐")
+
+
+def matrix_properties(model, jitter) -> Dict[Literal["condition_number", "eig_min", "eig_max"], float]:
+    iv = model.inducing_variable
+    kernel = model.kernel
+    kuu = gpflow.covariances.Kuu(iv, kernel, jitter=jitter)
+
+    eigvals = tf.linalg.eigvalsh(kuu).numpy()
+    eig_min = float(eigvals.min())
+    eig_max = float(eigvals.max())
+    condition_number = eig_max / eig_min
+    return dict(condition_number=condition_number, eig_min=eig_min, eig_max=eig_max)
 
 
 if __name__ == "__main__":

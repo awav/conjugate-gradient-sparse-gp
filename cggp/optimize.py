@@ -284,7 +284,9 @@ def make_param_callback(model):
 
 
 def make_metrics_callback(
-    model,
+    model: Union[
+        gpflow.models.ExternalDataTrainingLossMixin, gpflow.models.InternalDataTrainingLossMixin
+    ],
     train_data,
     test_data,
     batch_size: int,
@@ -341,7 +343,11 @@ def make_metrics_callback(
 
         rmse = np.sqrt(np.mean(error**2))
         nlpd = -lpd / n
-        metrics = {"train/elbo": elbo, "test/rmse": rmse, "test/nlpd": nlpd}
+        metrics = {
+            "train/elbo": float(elbo),
+            "test/rmse": float(rmse),
+            "test/nlpd": float(nlpd),
+        }
 
         if print_on:
             metrics_fmt = {

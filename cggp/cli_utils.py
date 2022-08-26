@@ -29,7 +29,8 @@ PrecisionName = Literal["fp32", "fp64"]
 PrecisionDtype = Literal[np.float32, np.float64]
 DistanceChoices = click.Choice(DistanceType.__args__)
 ModelChoices = click.Choice(ModelClassStr.__args__)
-PrecisionNames: Dict[PrecisionDtype, PrecisionName] = {np.float32: "fp32", np.float64: "fp64"}
+
+precision_names: Dict[PrecisionDtype, PrecisionName] = {np.float32: "fp32", np.float64: "fp64"}
 
 
 class FloatType(click.ParamType):
@@ -217,7 +218,7 @@ def create_oips_update_fn(
     data,
     rho: float = 0.5,
     use_jit: bool = True,
-    max_points: int = -1,
+    max_points: Optional[int] = None,
     distance_type: DistanceType = "covariance",
 ):
     """
@@ -229,7 +230,7 @@ def create_oips_update_fn(
     distance_fn = jit(use_jit)(distance_fn)
     kernel = model.kernel
     if max_points is None or max_points <= 0:
-        max_points = tf.shape(data[0])[0]
+        max_points: int = tf.shape(data[0])[0]
 
     @jit(use_jit)
     def oips_fn(inputs):

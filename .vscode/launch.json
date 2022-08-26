@@ -189,13 +189,41 @@
                 "--jitter",
                 "1e-6",
                 "--config-dir",
-                "${workspaceFolder}/cggp/logs/gpr/elevators/gpr_matern32_i1000/111",
+                "${workspaceFolder}/cggp/logs/gpr/${input:dataset}/gpr_matern32_i1000/111",
                 "--no-jit",
-                "uniform",
-                "--max-num-ip",
+                "${input:selection}",
+                "-m",
                 "2000",
                 "compute-metrics",
             ],
         },
+    ],
+    "inputs": [
+        {
+            "type": "pickString",
+            "id": "dataset",
+            "description": "Datasets",
+            "default": "elevators",
+            "options": [
+                "bike",
+                "elevators"
+            ]
+        },
+        {
+            "type": "pickString",
+            "id": "selection",
+            "description": "Selection",
+            "default": "uniform",
+            "options": [
+                "uniform",
+                "kmeans",
+            ]
+        },
+        {
+            "type": "promptString",
+            "id": "path",
+            "description": "Apply JIT",
+            "default": "${workspaceFolder}/experiments/logs-fp64/elevators/cglb_m4000-mt32-i1000-adam/*/traces.logs.npy",
+        }
     ]
 }
