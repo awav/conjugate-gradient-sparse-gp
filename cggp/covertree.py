@@ -1,5 +1,6 @@
 from typing import Tuple, List
 from typing import Callable, Literal, Optional
+import warnings
 import tensorflow as tf
 import matplotlib.pyplot as plt
 import math
@@ -16,16 +17,16 @@ class CoverTreeNode:
         radius,
         parent,
         data,
-        R_neighbors: Optional[list] = None
+        r_neighbors: Optional[list] = None
     ):
         self.point = point
         self.radius = radius
         self.parent = parent
         self.data = data
         self.children = []
-        if R_neighbors is None:
-            R_neighbors = [self]
-        self.R_neighbors = R_neighbors
+        if r_neighbors is None:
+            r_neighbors = [self]
+        self.r_neighbors = r_neighbors
 
 
 class CoverTree:
@@ -39,9 +40,14 @@ class CoverTree:
         voronoi = True,
         plotting = False,
     ):
+        warnings.warn("Distance function will be ignored and instead `numpy.linal.norm` will be used.")
+
         def distance_fn(args):
-            result = distance(args)
-            return np.array(result, dtype=result.dtype.as_numpy_dtype)
+            x, y = args
+            result = np.linalg.norm(x - y)
+            return result
+            # result = distance(args)
+            # return np.array(result, dtype=result.dtype.as_numpy_dtype)
 
         self.distance = distance_fn
         (x, y) = data
@@ -66,12 +72,12 @@ class CoverTree:
                 while len(parent.data[0]) > 0:
                     initial_point = parent.data[0][0]
                     if lloyds:
-                        initial_R_neighbor_x = parent.data[0]
-                        initial_distances = self.distance((initial_point, initial_R_neighbor_x))
-                        initial_neighborhood = initial_R_neighbor_x[initial_distances <= radius, :]
+                        initial_r_neighbor_x = parent.data[0]
+                        initial_distances = self.distance((initial_point, initial_r_neighbor_x))
+                        initial_neighborhood = initial_r_neighbor_x[initial_distances <= radius, :]
                         point = initial_neighborhood.mean(axis = -2)
-                        for R_neighbor in parent.R_neighbors:
-                            for child in R_neighbor.children:
+                        for r_neighbor in parent.r_neighbors:
+                            for child in r_neighbor.children:
                                 if np.linalg.norm(point - child.point) < radius:
                                     point = initial_point
                                     break
@@ -82,30 +88,30 @@ class CoverTree:
                         point = initial_point
                     neighborhood_x = np.empty((0,parent.data[0].shape[-1]))
                     neighborhood_y = np.empty((0,parent.data[1].shape[-1]))
-                    for R_neighbor in parent.R_neighbors:
-                        (R_neighbor_x, R_neighbor_y) = R_neighbor.data
-                        distances = self.distance((point, R_neighbor_x))
+                    for r_neighbor in parent.r_neighbors:
+                        (r_neighbor_x, r_neighbor_y) = r_neighbor.data
+                        distances = self.distance((point, r_neighbor_x))
                         indices = distances <= radius
-                        neighborhood_x = np.concatenate((neighborhood_x, R_neighbor_x[indices, :]), axis=-2)
-                        neighborhood_y = np.concatenate((neighborhood_y, R_neighbor_y[indices, :]), axis=-2)
-                        R_neighbor.data = (R_neighbor_x[~indices, :], R_neighbor_y[~indices, :])
+                        neighborhood_x = np.concatenate((neighborhood_x, r_neighbor_x[indices, :]), axis=-2)
+                        neighborhood_y = np.concatenate((neighborhood_y, r_neighbor_y[indices, :]), axis=-2)
+                        r_neighbor.data = (r_neighbor_x[~indices, :], r_neighbor_y[~indices, :])
                     child = CoverTreeNode(point, radius, parent, (neighborhood_x, neighborhood_y))
                     self.levels[level].append(child)
                     parent.children.append(child)
             for parent in self.levels[level-1]:
-                potential_child_R_neighbors = [child for R_neighbor in parent.R_neighbors for child in R_neighbor.children]
+                potential_child_r_neighbors = [child for r_neighbor in parent.r_neighbors for child in r_neighbor.children]
                 for child in parent.children:
-                    child.R_neighbors = [R_neighbor for R_neighbor in potential_child_R_neighbors if np.linalg.norm(R_neighbor.point - child.point) <= 4*radius]
+                    child.r_neighbors = [r_neighbor for r_neighbor in potential_child_r_neighbors if np.linalg.norm(r_neighbor.point - child.point) <= 4*radius]
                     if plotting: child.plotting_data = (child.data[0].copy(), child.data[1].copy())
             if voronoi:
                 for parent in self.levels[level-1]:
                     (voronoi_x, voronoi_y) = parent.voronoi_data
                     if voronoi_x.size > 0:
-                        potential_child_R_neighbors = [child for R_neighbor in parent.R_neighbors for child in R_neighbor.children]
-                        potential_points = np.stack([child.point for child in potential_child_R_neighbors])
+                        potential_child_r_neighbors = [child for r_neighbor in parent.r_neighbors for child in r_neighbor.children]
+                        potential_points = np.stack([child.point for child in potential_child_r_neighbors])
                         potential_distances = np.linalg.norm(potential_points[:,None,...] - voronoi_x[None,:,...], axis=-1)
                         nearest_potential_child = np.argmin(potential_distances, axis=0)
-                        for (idx, child) in enumerate(potential_child_R_neighbors):
+                        for (idx, child) in enumerate(potential_child_r_neighbors):
                             if not hasattr(child, "voronoi_data"):
                                 child.voronoi_data = (np.empty((0,parent.voronoi_data[0].shape[-1])), np.empty((0,parent.voronoi_data[1].shape[-1])))
                             child_indices = nearest_potential_child == idx
