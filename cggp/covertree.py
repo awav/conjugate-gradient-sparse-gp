@@ -44,7 +44,7 @@ class CoverTree:
 
         def distance_fn(args):
             x, y = args
-            result = np.linalg.norm(x - y)
+            result = np.linalg.norm(x - y, axis=-1)
             return result
             # result = distance(args)
             # return np.array(result, dtype=result.dtype.as_numpy_dtype)
@@ -100,16 +100,19 @@ class CoverTree:
                     parent.children.append(child)
             for parent in self.levels[level-1]:
                 potential_child_r_neighbors = [child for r_neighbor in parent.r_neighbors for child in r_neighbor.children]
+                # children = [child.point for child in parent.children]
+                # r_neighbors = [child.point for child in potential_child_r_neighbors]
                 for child in parent.children:
-                    child.r_neighbors = [r_neighbor for r_neighbor in potential_child_r_neighbors if np.linalg.norm(r_neighbor.point - child.point) <= 4*radius]
-                    if plotting: child.plotting_data = (child.data[0].copy(), child.data[1].copy())
+                    child.r_neighbors = [r_neighbor for r_neighbor in potential_child_r_neighbors if self.distance((r_neighbor.point, child.point)) <= 4*radius]
+                    if plotting:
+                        child.plotting_data = (child.data[0].copy(), child.data[1].copy())
             if voronoi:
                 for parent in self.levels[level-1]:
                     (voronoi_x, voronoi_y) = parent.voronoi_data
                     if voronoi_x.size > 0:
                         potential_child_r_neighbors = [child for r_neighbor in parent.r_neighbors for child in r_neighbor.children]
                         potential_points = np.stack([child.point for child in potential_child_r_neighbors])
-                        potential_distances = np.linalg.norm(potential_points[:,None,...] - voronoi_x[None,:,...], axis=-1)
+                        potential_distances = self.distance((potential_points[:,None,...], voronoi_x[None,:,...]))
                         nearest_potential_child = np.argmin(potential_distances, axis=0)
                         for (idx, child) in enumerate(potential_child_r_neighbors):
                             if not hasattr(child, "voronoi_data"):
@@ -143,4 +146,4 @@ class CoverTree:
         ]
         dtype = self.levels[-1][0].data[1].dtype
         means, counts = zip(*means_and_counts)
-        return means.astype(dtype)[..., None], counts.astype(dtype)[..., None]
+        return np.array(means, dtype=dtype)[..., None], np.array(counts, dtype=dtype)[..., None]

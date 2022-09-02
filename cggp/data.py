@@ -95,6 +95,9 @@ def load_data(name: str, as_tensor: bool = True, normalise: bool = True, seed: i
         train, test = snelson1d("~/.dataset/snelson1d/")
     elif name == "east_africa":
         train, test = east_africa("~/.datasets/east_africa")
+    elif name == "naval":
+        dat = getattr(bbd, "Naval")(split=seed, prop=0.67)
+        train, test = (dat.X_train, dat.Y_train), (dat.X_test, dat.Y_test)
     else:
         uci_name = name
         if not name.startswith("Wilson_"):

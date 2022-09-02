@@ -225,6 +225,32 @@
                 "compute-metrics",
             ],
         },
+        {
+            "name": "Test covertree exp-1 no config",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/cggp/paper_cli_uci.py",
+            "console": "integratedTerminal",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}:${workspaceFolder}/cggp/:${env:PYTHONPATH}",
+                "CUDA_DEVICE_ORDER": "PCI_BUS_ID",
+                "CUDA_VISIBLE_DEVICES": "3",
+            },
+            "justMyCode": false,
+            "args": [
+                "--model-class",
+                "sgpr",
+                "--precision",
+                "fp64",
+                "--jitter",
+                "1e-6",
+                "--no-jit",
+                "covertree",
+                "-s",
+                "0.5",
+                "compute-metrics",
+            ],
+        },
     ],
     "inputs": [
         {
@@ -234,7 +260,8 @@
             "default": "elevators",
             "options": [
                 "bike",
-                "elevators"
+                "elevators",
+                "naval",
             ]
         },
         {

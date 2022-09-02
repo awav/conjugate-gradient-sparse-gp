@@ -39,7 +39,7 @@ def model_fn_choices(train_data, error_threshold: float = 1e-6):
 @click.option("-mc", "--model-class", type=ModelChoices, required=True)
 @click.option("-p", "--precision", type=FloatType(), required=True)
 @click.option("-j", "--jitter", type=float, required=True)
-@click.option("-c", "--config-dir", type=LogdirPath(), required=True)
+@click.option("-c", "--config-dir", type=LogdirPath())
 @click.option("--jit/--no-jit", type=bool, default=True)
 @click.pass_context
 def main(
@@ -57,15 +57,20 @@ def main(
     gpflow.config.set_default_jitter(jitter)
 
     # Reference model
-    ref_info = load_from_json(Path(config_dir, "info.json"))
-    ref_params = load_from_npy(Path(config_dir, "params.npy"))
-
-    seed: int = ref_info["seed"]
+    if config_dir is not None:
+        ref_info = load_from_json(Path(config_dir, "info.json"))
+        ref_params = load_from_npy(Path(config_dir, "params.npy"))
+        seed: int = ref_info["seed"]
+        dataset_name = ref_info["dataset_name"]
+    else:
+        ref_info = None
+        ref_params = None
+        seed = 111
+        dataset_name = "naval"
 
     np.random.seed(seed)
     tf.random.set_seed(seed)
 
-    dataset_name = ref_info["dataset_name"]
     dataset_fn: DatasetCallable = DatasetType().convert(dataset_name, None, None)
     dataset = dataset_fn(seed)
 
@@ -100,9 +105,13 @@ def compute_metrics(ctx: click.Context, logdir: Path, test_batch_size: Union[int
 
     use_jit = common_ctx["jit"]
     dataset = common_ctx["dataset"]
+    params =  common_ctx["ref_params"]
     model = ip_ctx["model"]
     update_ip_fn = ip_ctx["update_fn"]
     jitter = common_ctx["jitter"]
+
+    if params is not None:
+        gpflow.utilities.multiple_assign(model, params)
 
     if test_batch_size is None:
         test_batch_size: int = dataset.test[0].shape[0]
