@@ -53,11 +53,15 @@ def main(
     np.random.seed(seed)
     tf.random.set_seed(seed)
 
+    size_limit = 10000
+
     data = dataset(seed)
     train_data = data.train
     test_data = data.test
 
-    model = create_gpr_model(train_data, kernel)
+    train_data_slice = tuple(map(lambda d: d[:size_limit], train_data))
+
+    model = create_gpr_model(train_data_slice, kernel)
 
     monitor = create_monitor(
         model,

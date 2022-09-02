@@ -158,7 +158,7 @@
             "justMyCode": false,
             "args": [
                 "--dataset",
-                "elevators",
+                "east_africa",
                 "--seed",
                 "111",
                 "--no-jit",
