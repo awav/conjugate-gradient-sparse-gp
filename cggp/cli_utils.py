@@ -3,6 +3,7 @@ from operator import iconcat
 import glob
 from typing import Literal, Callable, Optional, List, Optional, TypeVar, Dict, Sequence
 from pathlib import Path
+import glob
 
 import click
 import gpflow
@@ -86,9 +87,11 @@ class DatasetType(click.ParamType):
             self.fail(f"{value} dataset is not supported", param, ctx)
         try:
             dataname = value
+
             def load_data_fn(seed: int, as_tensor: bool = True):
                 data = load_data(dataname, as_tensor=as_tensor, seed=seed)
                 return data
+
             return load_data_fn
         except Exception:
             self.fail(f"Error occured during loading {value} dataset", param, ctx)
@@ -174,11 +177,9 @@ def create_gpr_model(
     dtype = x.dtype
 
     kernel = kernel_fn(dim)
-    model_fn = gpflow.models.GPR
-    model = model_fn(train_data, kernel, noise_variance=default_variance, **model_kwargs)
+    model = gpflow.models.GPR(train_data, kernel, noise_variance=default_variance, **model_kwargs)
 
     return model
-
 
 
 def create_kmeans_update_fn(
@@ -310,7 +311,7 @@ def create_update_fn(
 
 def kernel_fn(dim):
     lengthscale = [1.0] * dim
-    variance = 0.1
+    variance = 1.0
     # kernel = gpflow.kernels.SquaredExponential(variance=variance, lengthscales=lengthscale)
     kernel = gpflow.kernels.Matern32(variance=variance, lengthscales=lengthscale)
     return kernel
@@ -392,7 +393,7 @@ def gpr_class(train_data, kernel, likelihood, **kwargs):
 
 
 def kernel_to_name(kernel: gpflow.kernels.Kernel) -> str:
-    if isinstance(kernel,  gpflow.kernels.SquaredExponential):
+    if isinstance(kernel, gpflow.kernels.SquaredExponential):
         return "se"
     elif isinstance(kernel, gpflow.kernels.Matern12):
         return "matern12"
@@ -410,4 +411,3 @@ def name_to_kernel(name: str, dim: int = 1):
     elif name == "matern32":
         return gpflow.kernels.Matern32(lengthscales=lengthscales)
     raise NotImplementedError(f"Unknown kernel name {name}")
-    

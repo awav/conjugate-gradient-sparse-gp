@@ -39,7 +39,7 @@ def model_fn_choices(train_data, error_threshold: float = 1e-6):
 @click.option("-mc", "--model-class", type=ModelChoices, required=True)
 @click.option("-p", "--precision", type=FloatType(), required=True)
 @click.option("-j", "--jitter", type=float, required=True)
-@click.option("-c", "--config-dir", type=LogdirPath())
+@click.option("-c", "--config-dir", type=LogdirPath(mkdir=False))
 @click.option("--jit/--no-jit", type=bool, default=True)
 @click.pass_context
 def main(
@@ -105,7 +105,7 @@ def compute_metrics(ctx: click.Context, logdir: Path, test_batch_size: Union[int
 
     use_jit = common_ctx["jit"]
     dataset = common_ctx["dataset"]
-    params =  common_ctx["ref_params"]
+    params = common_ctx["ref_params"]
     model = ip_ctx["model"]
     update_ip_fn = ip_ctx["update_fn"]
     jitter = common_ctx["jitter"]
@@ -122,6 +122,7 @@ def compute_metrics(ctx: click.Context, logdir: Path, test_batch_size: Union[int
         dataset.test,
         batch_size=test_batch_size,
         use_jit=use_jit,
+        check_numerics=False,
     )
 
     info = {
@@ -138,14 +139,21 @@ def compute_metrics(ctx: click.Context, logdir: Path, test_batch_size: Union[int
     update_ip_fn()
     metrics = metrics_fn(-1)
     m = int(model.inducing_variable.num_inducing)
-    properties = matrix_properties(model, jitter)
-    results = {**info, **metrics, **properties, **{"num_inducing_points": m}}
+    properties = covariance_properties(model, jitter)
+    results = {
+        **info,
+        **metrics,
+        **properties,
+        **{"num_inducing_points": m, "jitter": jitter},
+    }
 
     store_as_json(Path(logdir, "results.json"), results)
     click.echo("⭐⭐⭐ Script finished ⭐⭐⭐")
 
 
-def matrix_properties(model, jitter) -> Dict[Literal["condition_number", "eig_min", "eig_max"], float]:
+def covariance_properties(
+    model, jitter
+) -> Dict[Literal["condition_number", "eig_min", "eig_max"], float]:
     iv = model.inducing_variable
     kernel = model.kernel
     kuu = gpflow.covariances.Kuu(iv, kernel, jitter=jitter)

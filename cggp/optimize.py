@@ -291,6 +291,7 @@ def make_metrics_callback(
     batch_size: int,
     use_jit: bool = True,
     print_on: bool = True,
+    check_numerics: bool = True,
 ):
     """
     Callback for computing test metrics (RMSE and NLPD)
@@ -355,7 +356,9 @@ def make_metrics_callback(
             metrics_str = json.dumps(metrics_fmt)
             click.echo(f"Step [{step}], metrics: {metrics_str}")
 
-        tf.debugging.check_numerics(elbo, f"The training ELBO has got an undefined value {elbo}")
+        if check_numerics:
+            tf.debugging.check_numerics(elbo, f"The training ELBO has got an undefined value {elbo}")
+
         return metrics
 
     return step_callback
