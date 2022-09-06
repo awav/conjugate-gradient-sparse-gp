@@ -12,7 +12,7 @@ if __name__ == "__main__":
     y = np.random.rand(1024*16, 1)
     data = x, y
     start = time.time()
-    tree = CoverTree(euclid_distance, data, spatial_resolution=0.18/16)
+    tree = CoverTree(euclid_distance, data, spatial_resolution=0.18/16, plotting=True)
     print(f"Total time: {time.time() - start}")
     fig, axes = plt.subplots(1, len(tree.levels), figsize=((6 * len(tree.levels), 6)))
     for level in range(len(tree.levels)):
