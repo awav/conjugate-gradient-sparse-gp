@@ -53,11 +53,15 @@ def main(
     np.random.seed(seed)
     tf.random.set_seed(seed)
 
+    size_limit = 10000
+
     data = dataset(seed)
     train_data = data.train
     test_data = data.test
 
-    model = create_gpr_model(train_data, kernel)
+    train_data_slice = tuple(map(lambda d: d[:size_limit], train_data))
+
+    model = create_gpr_model(train_data_slice, kernel)
 
     monitor = create_monitor(
         model,
@@ -89,8 +93,8 @@ def main(
 
     click.echo("★★★ Start training ★★★")
 
-    for _ in range(2):
-        train_using_lbfgs_and_update(
+    for _ in range(1):
+        result = train_using_lbfgs_and_update(
             train_data,
             model,
             num_iterations,
@@ -104,9 +108,6 @@ def main(
     params = parameter_dict(model)
     params_np = to_numpy(params)
 
-    store_as_json(Path(logdir, "info.json"), info)
-    store_as_npy(Path(logdir, "params.npy"), params_np)
-
     metrics_fn = make_metrics_callback(
         model,
         train_data,
@@ -117,7 +118,10 @@ def main(
     )
 
     metrics = metrics_fn(0)
+
     store_as_json(Path(logdir, "results.json"), metrics)
+    store_as_json(Path(logdir, "info.json"), info)
+    store_as_npy(Path(logdir, "params.npy"), params_np)
 
     click.echo("⭐⭐⭐ Script finished ⭐⭐⭐")
 
