@@ -34,7 +34,7 @@ class CoverTree:
         plotting=False,
     ):
         warnings.warn(
-            "Distance function will be ignored and instead `numpy.linal.norm` will be used."
+            "Distance function will be ignored and instead `numpy.linalg.norm` will be used."
         )
 
         def distance_fn(args):
@@ -62,6 +62,7 @@ class CoverTree:
             root.plotting_data = (root.data[0].copy(), root.data[1].copy())
         self.levels = [[] for _ in range(num_levels)]
         self.levels[0].append(root)
+        neighbor_factor = 4 * (1 - 1/2**np.arange(num_levels, -1, -1)) 
 
         for level in range(1, num_levels):
             radius = max_radius / (2**level)
@@ -109,7 +110,7 @@ class CoverTree:
                     child.r_neighbors = [
                         r_neighbor
                         for r_neighbor in potential_child_r_neighbors
-                        if self.distance((r_neighbor.point, child.point)) <= 4 * radius
+                        if self.distance((r_neighbor.point, child.point)) <= neighbor_factor[level] * radius
                     ]
                     if plotting:
                         child.plotting_data = (child.data[0].copy(), child.data[1].copy())
