@@ -1,4 +1,3 @@
-from asyncio import selector_events
 from typing import Sequence, Union
 import functools
 import operator
@@ -10,7 +9,8 @@ import json
 from cli_utils import expand_paths_with_wildcards
 from pathlib import Path
 import tempfile
-from tinydb import TinyDB, where, Query
+from tinydb import TinyDB, where
+import matplotlib.pyplot as plt
 
 # Experiment changes `model', `precision' [fp32 | fp64], and `clustering_type' [uniform | kmeans | oips | covertree], `jitter'.
 
@@ -52,6 +52,10 @@ def main(files: Sequence[Union[Path, str]]):
 
     metrics = ["train/elbo", "test/rmse", "test/nlpd", "condition_number"]
     aggregation = ["mean", "std"]
+    processed_frames = {}
+    ip_key = "num_inducing_points"
+
+    # Post processing
 
     with tempfile.NamedTemporaryFile(prefix="tinydb.", suffix=".json") as tmpfile:
         db_filepath = tmpfile.name
@@ -61,21 +65,33 @@ def main(files: Sequence[Union[Path, str]]):
         value_sequence = [list(key_values[key]) for key in keys_sequence]
         product_query_values = product(*value_sequence)
 
-        output_data = {}
-
         for query_values in product_query_values:
             name = query_name_str(query_values)
             key_value_pairs = list(zip(keys_sequence, query_values))
             full_query = foldl_queries(key_value_pairs)
             selected_rows = db.search(full_query)
             df = pd.DataFrame(selected_rows)
-            df = df.sort_values(by="num_inducing_points")
+            df = df.sort_values(by=ip_key)
             instructions = {metric: aggregation for metric in metrics}
-            data_collection = df.groupby(by="num_inducing_points").agg(instructions)
-            output_data[name] = data_collection
-        
-        
+            frame = df.groupby(by=ip_key).agg(instructions)
+            processed_frames[name] = frame
+    
+    # Plotting
 
+    fig, axes = plt.subplots(nrows=len(metrics))
+    for i, metric in enumerate(metrics):
+        ax = axes[i]
+        ax.set_ylabel(metric)
+        ax.set_xlabel(ip_key)
+        for name, frame in processed_frames.items():
+            x = list(frame.index)
+            y = list(frame[metric]["mean"])
+            ax.plot(x, y, label=name)
+        if i == 0:
+            ax.legend()
+    
+    plt.tight_layout()
+    plt.show()
     click.echo(f"Finished")
 
 
