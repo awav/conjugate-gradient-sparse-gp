@@ -1,4 +1,7 @@
-from typing import Literal, Callable, Optional, List, Optional, TypeVar, Dict
+from functools import reduce
+from operator import iconcat
+import glob
+from typing import Literal, Callable, Optional, List, Optional, TypeVar, Dict, Sequence
 from pathlib import Path
 
 import click
@@ -124,6 +127,11 @@ class KernelType(click.ParamType):
             return create_kernel_fn
         except Exception as ex:
             self.fail(f"{value} is not supported", param, ctx)
+
+
+def expand_paths_with_wildcards(filepaths: Sequence[str]) -> Sequence[str]:
+    full_list = [glob.glob(f) for f in filepaths]
+    return list(reduce(iconcat, full_list, []))
 
 
 def create_model(

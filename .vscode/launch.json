@@ -251,6 +251,20 @@
                 "compute-metrics",
             ],
         },
+        {
+            "name": "Plot UCI metrics",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/cggp/paper_cli_uci_plot.py",
+            "console": "integratedTerminal",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}:${workspaceFolder}/cggp/:${env:PYTHONPATH}",
+            },
+            "justMyCode": false,
+            "args": [
+                "${workspaceFolder}/cggp/logs/uci/${input:dataset}/*/*/results.json",
+            ],
+        },
     ],
     "inputs": [
         {
