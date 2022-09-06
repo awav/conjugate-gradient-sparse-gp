@@ -18,6 +18,10 @@ import matplotlib.pyplot as plt
 @click.command()
 @click.argument("files", nargs=-1, type=click.Path(dir_okay=False))
 def main(files: Sequence[Union[Path, str]]):
+    """
+    Loads the data from given files, post processes and find mean and standard deviations
+    for metrics `test/rmse`, `test/nlpd`, `train/elbo`, `condition_number`.
+    """
     files = files if isinstance(files, (list, tuple)) else [files]
     expanded_files = expand_paths_with_wildcards(files)
 
@@ -77,7 +81,6 @@ def main(files: Sequence[Union[Path, str]]):
             processed_frames[name] = frame
     
     # Plotting
-
     fig, axes = plt.subplots(nrows=len(metrics))
     for i, metric in enumerate(metrics):
         ax = axes[i]

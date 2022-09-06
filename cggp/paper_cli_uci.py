@@ -115,7 +115,7 @@ def compute_metrics(ctx: click.Context, logdir: Path, test_batch_size: Union[int
 
     if test_batch_size is None:
         test_batch_size: int = dataset.test[0].shape[0]
-
+    
     metrics_fn = make_metrics_callback(
         model,
         dataset.train,
@@ -125,26 +125,34 @@ def compute_metrics(ctx: click.Context, logdir: Path, test_batch_size: Union[int
         check_numerics=False,
     )
 
+    update_ip_fn()
+    metrics = metrics_fn(-1)
+    m = int(model.inducing_variable.num_inducing)
+    properties = covariance_properties(model, jitter)
+
+    train_size: int = dataset.train[0].shape[0]
+    test_size: int = dataset.test[0].shape[0]
+
     info = {
+        "seed": common_ctx["seed"],
         "model": common_ctx["model_class"],
         "dataset": common_ctx["dataset_name"],
+        "train_data_size": train_size,
+        "test_data_size": test_size,
         "jitter": common_ctx["jitter"],
         "precision": common_ctx["precision"],
         "jit": common_ctx["jit"],
         "config_dir": common_ctx["config_dir"],
         "clustering_type": ip_ctx["clustering_type"],
         "clustering_args": ip_ctx["clustering_kwargs"],
+        "num_inducing_points": m,
+        "jitter": jitter,
     }
 
-    update_ip_fn()
-    metrics = metrics_fn(-1)
-    m = int(model.inducing_variable.num_inducing)
-    properties = covariance_properties(model, jitter)
     results = {
         **info,
         **metrics,
         **properties,
-        **{"num_inducing_points": m, "jitter": jitter},
     }
 
     store_as_json(Path(logdir, "results.json"), results)
