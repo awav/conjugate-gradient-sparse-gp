@@ -142,6 +142,7 @@ def compute_metrics(ctx: click.Context, logdir: Path, test_batch_size: Union[int
 
     train_size: int = dataset.train[0].shape[0]
     test_size: int = dataset.test[0].shape[0]
+    input_dim: int = dataset.train[0].shape[-1]
 
     info = {
         "seed": common_ctx["seed"],
@@ -149,6 +150,7 @@ def compute_metrics(ctx: click.Context, logdir: Path, test_batch_size: Union[int
         "dataset": common_ctx["dataset_name"],
         "train_data_size": train_size,
         "test_data_size": test_size,
+        "input_dim": input_dim,
         "jitter": common_ctx["jitter"],
         "precision": common_ctx["precision"],
         "jit": common_ctx["jit"],
