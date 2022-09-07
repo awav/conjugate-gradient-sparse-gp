@@ -266,6 +266,7 @@ def train_adam(
         "learning_rate": learning_rate,
         "logdir": logdir,
         "batch_size": batch_size,
+        "test_batch_size": test_batch_size,
         "train_size": train_data[0].shape[0],
         "test_size": test_data[0].shape[0],
         "input_dimension": train_data[0].shape[-1],
