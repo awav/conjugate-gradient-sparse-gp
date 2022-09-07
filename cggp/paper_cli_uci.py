@@ -9,7 +9,7 @@ from pathlib import Path
 
 from cli_utils import (
     sgpr_class,
-    cggp_class,
+    cdgp_class,
     precision_names,
     ModelClassStr,
     DatasetType,
@@ -31,7 +31,7 @@ def model_fn_choices(train_data, error_threshold: float = 1e-6):
         return sgpr_class(train_data, *args, **kwargs)
 
     def cdgp_class_wrapper(*args, **kwargs):
-        return cggp_class(*args, error_threshold=error_threshold, **kwargs)
+        return cdgp_class(*args, error_threshold=error_threshold, **kwargs)
 
     return dict(sgpr=sgpr_class_wrapper, cdgp=cdgp_class_wrapper)
 

@@ -17,7 +17,7 @@ from cli_utils import (
     create_model_and_update_fn,
     create_predict_fn,
     batch_posterior_computation,
-    cggp_class,
+    cdgp_class,
     sgpr_class,
     precision_names,
     DatasetType,
@@ -42,7 +42,7 @@ from optimize import (
 class MainContext:
     seed: int
     logdir: Union[Path, str]
-    model_class: ModelClassStr 
+    model_class: ModelClassStr
     dataset: DatasetBundle
     train_data: Dataset
     test_data: Dataset
@@ -93,10 +93,10 @@ def main(
     def sgpr_class_wrapper(*args, **kwargs):
         return sgpr_class(train_data, *args, **kwargs)
 
-    def cggp_class_wrapper(*args, **kwargs):
-        return cggp_class(*args, error_threshold=error_threshold, **kwargs)
+    def cdgp_class_wrapper(*args, **kwargs):
+        return cdgp_class(*args, error_threshold=error_threshold, **kwargs)
 
-    model_classes = dict(sgpr=sgpr_class_wrapper, cggp=cggp_class_wrapper)
+    model_classes = dict(sgpr=sgpr_class_wrapper, cdgp=cdgp_class_wrapper)
     model_class_fn = model_classes[model_class]
 
     obj = MainContext(
@@ -138,6 +138,7 @@ def covertree(ctx: click.Context, spatial_resolution: float, distance_type: Dist
         model=model,
         update_fn=update_fn,
         clustering_type=clustering_type,
+        clustering_kwargs=clustering_kwargs,
         distance_type=distance_type,
     )
 
@@ -166,6 +167,7 @@ def kmeans(ctx: click.Context, max_num_ip: int, distance_type: DistanceType):
         model=model,
         update_fn=update_fn,
         clustering_type=clustering_type,
+        clustering_kwargs=clustering_kwargs,
         distance_type=distance_type,
     )
 
@@ -195,6 +197,7 @@ def oips(ctx: click.Context, rho: float, max_num_ip: int, distance_type: Distanc
         model=model,
         update_fn=update_fn,
         clustering_type=clustering_type,
+        clustering_kwargs=clustering_kwargs,
         distance_type=distance_type,
     )
 
@@ -228,6 +231,7 @@ def train_adam(
     model = obj.extra_obj["model"]
     update_fn = obj.extra_obj["update_fn"]
     clustering_type = obj.extra_obj["clustering_type"]
+    clustering_kwargs = obj.extra_obj["clustering_kwargs"]
     distance_type = obj.extra_obj["distance_type"]
 
     gpflow.utilities.set_trainable(model.inducing_variable, trainable_inducing_points)
@@ -247,6 +251,9 @@ def train_adam(
         logdir=logdir,
     )
 
+    click.echo("★★★ Start training ★★★")
+    update_fn()
+
     m = int(model.inducing_variable.num_inducing)
     info = {
         "seed": obj.seed,
@@ -263,6 +270,7 @@ def train_adam(
         "test_size": test_data[0].shape[0],
         "input_dimension": train_data[0].shape[-1],
         "clustering_type": clustering_type,
+        "clustering_kwargs": clustering_kwargs,
         "distance_type": distance_type,
         "model_class": obj.model_class,
         "trainable_inducing_points": trainable_inducing_points,
@@ -271,8 +279,6 @@ def train_adam(
     click.echo(f"-> {info_str}")
 
     # Run hyperparameter tuning
-    click.echo("★★★ Start training ★★★")
-    update_fn()
     train_using_adam_and_update(
         train_data,
         model,

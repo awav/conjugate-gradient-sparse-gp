@@ -128,7 +128,7 @@ class LpSVGP(gpflow.models.GPModel, gpflow.models.ExternalDataTrainingLossMixin)
         x, y = data
         kl = self.prior_kl()
         f_mean, f_var = self.predict_f(x, full_cov=False, full_output_cov=False)
-        var_exp = self.likelihood.variational_expectations(f_mean, f_var, y)
+        var_exp = self.likelihood.variational_expectations(x, f_mean, f_var, y)
         scale = self.scale(tf.shape(x)[0], kl.dtype)
         return tf.reduce_sum(var_exp) * scale - kl
 

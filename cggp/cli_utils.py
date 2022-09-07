@@ -343,9 +343,16 @@ def create_model_and_update_fn(
     def update_fn():
         iv, means, count = internal_update_fn()
         if isinstance(model, CGGP):
-            model.inducing_variable.Z.assign(iv)
-            model.pseudo_u.assign(means)
-            model.cluster_counts.assign(count)
+            iv_dtype = model.inducing_variable.Z.dtype
+            means_dtype = model.pseudo_u.dtype
+            counts_dtype = model.cluster_counts.dtype
+            iv_tensor = tf.cast(iv, dtype=iv_dtype)
+            means_tensor = tf.cast(means, dtype=means_dtype)
+            count_tensor = tf.cast(count, dtype=counts_dtype)
+
+            model.inducing_variable.Z.assign(iv_tensor)
+            model.pseudo_u.assign(means_tensor)
+            model.cluster_counts.assign(count_tensor)
         else:
             model.inducing_variable.Z.assign(iv)
         return iv, means, count
@@ -376,7 +383,7 @@ def batch_posterior_computation(predict_fn, data, batch_size):
     return means, variances
 
 
-def cggp_class(kernel, likelihood, iv, error_threshold: float = 1e-6, **kwargs):
+def cdgp_class(kernel, likelihood, iv, error_threshold: float = 1e-6, **kwargs):
     conjugate_gradient = ConjugateGradient(error_threshold)
     return CGGP(kernel, likelihood, iv, conjugate_gradient, **kwargs)
 

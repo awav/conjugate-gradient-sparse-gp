@@ -23,7 +23,7 @@ cmd = 'python ./paper_cli_geospatial.py -l "{uid}" -mc {model} -p {precision} -d
 # Covertree CDGP
 [[exp]]
 cmd = '{cmd} covertree -s {resolution} train-adam -n {maxiters} -b {batchsize} -tb {test_batchsize} -l {lr} --no-tip'
-uid = './{rootdir}/{name}/{dataset}/{model}_p{precision}_s{resolution}_i{maxiters}_lr{lr}_b{batchsize}_notip/{seed}'
+uid = './{rootdir}/{name}/{dataset}/{model}_{precision}_s{resolution}_i{maxiters}_lr{lr}_b{batchsize}_notip/{seed}'
 
 name = "geospatial_covertree"
 rootdir = "logs"
@@ -42,8 +42,8 @@ seed = [111, 222]
 
 # Covertree SGPR
 [[exp]]
-cmd = '{cmd} covertree -s {resolution} train-adam -n {maxiters} -b {batchsize} -tb {test_batchsize} -l {lr} --no-tip'
-uid = './{rootdir}/{name}/{dataset}/{model}_p{precision}_s{resolution}_i{maxiters}_lr{lr}_b{batchsize}_notip/{seed}'
+cmd = '{cmd} -j {jitter} covertree -s {resolution} train-adam -n {maxiters} -b {batchsize} -tb {test_batchsize} -l {lr} --no-tip'
+uid = './{rootdir}/{name}/{dataset}/{model}_{precision}_j{jitter}_s{resolution}_i{maxiters}_lr{lr}_b{batchsize}_notip/{seed}'
 
 name = "geospatial_covertree"
 rootdir = "logs"
@@ -64,7 +64,5 @@ seed = [111, 222]
 
 [flags]
 restart = false
-# num_proc = 4
-# gpu_indices = ["0", "1", "2", "3"]
-num_proc = 3
-gpu_indices = ["0", "1", "3"]
+num_proc = 4
+gpu_indices = ["0", "1", "2", "3"]
