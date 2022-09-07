@@ -1,3 +1,4 @@
+import glob
 from typing import Union, Dict, Literal
 import click
 import tensorflow as tf
@@ -44,7 +45,7 @@ def model_fn_choices(train_data, error_threshold: float = 1e-6):
 @click.pass_context
 def main(
     ctx: click.Context,
-    config_dir: Path,
+    config_dir: Union[Path, str],
     model_class: ModelClassStr,
     precision: tf.DType,
     jitter: float,
@@ -56,8 +57,19 @@ def main(
     gpflow.config.set_default_float(precision)
     gpflow.config.set_default_jitter(jitter)
 
+    # NOTE(awav): Some datasets will have values near the boundary and fail at numerics checks.
+    gpflow.config.set_default_positive_minimum(1e-9)
+
     # Reference model
     if config_dir is not None:
+        glob_dirs = glob.glob(str(config_dir))
+
+        if len(glob_dirs) > 1:
+            raise click.UsageError(
+                f"Ambiguous config directory specified using whildcards. Found {glob_dirs}."
+            )
+
+        config_dir = glob_dirs[0]
         ref_info = load_from_json(Path(config_dir, "info.json"))
         ref_params = load_from_npy(Path(config_dir, "params.npy"))
         seed: int = ref_info["seed"]
@@ -67,15 +79,13 @@ def main(
         ref_params = None
         seed = 111
         dataset_name = "naval"
+        config_dir = "none"
 
     np.random.seed(seed)
     tf.random.set_seed(seed)
 
     dataset_fn: DatasetCallable = DatasetType().convert(dataset_name, None, None)
     dataset = dataset_fn(seed)
-
-    # kernel_name = ref_info["kernel"]
-    # kernel_fn = KernelType().convert(kernel_name, None, None)
     model_class_fn = model_fn_choices(dataset.train)[model_class]
 
     common_ctx = dict(
@@ -115,7 +125,7 @@ def compute_metrics(ctx: click.Context, logdir: Path, test_batch_size: Union[int
 
     if test_batch_size is None:
         test_batch_size: int = dataset.test[0].shape[0]
-    
+
     metrics_fn = make_metrics_callback(
         model,
         dataset.train,
