@@ -251,7 +251,7 @@ def train_adam(
         logdir=logdir,
     )
 
-    click.echo("★★★ Start training ★★★")
+    click.echo("★★★ Start initialising ★★★")
     update_fn()
 
     m = int(model.inducing_variable.num_inducing)
@@ -279,6 +279,7 @@ def train_adam(
     click.echo(f"-> {info_str}")
 
     # Run hyperparameter tuning
+    click.echo("★★★ Start training ★★★")
     train_using_adam_and_update(
         train_data,
         model,
