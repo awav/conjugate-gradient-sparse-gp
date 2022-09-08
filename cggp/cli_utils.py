@@ -148,7 +148,7 @@ def create_model(
     n = x.shape[0]
     dim = x.shape[-1]
     default_variance = 0.1
-    dtype = x.dtype
+    dtype = gpflow.config.default_float()
 
     if num_inducing_points is not None:
         rand_indices = np.random.choice(n, size=num_inducing_points, replace=False)
@@ -174,7 +174,6 @@ def create_gpr_model(
     n = x.shape[0]
     dim = x.shape[-1]
     default_variance = 0.1
-    dtype = x.dtype
 
     kernel = kernel_fn(dim)
     model = gpflow.models.GPR(train_data, kernel, noise_variance=default_variance, **model_kwargs)
@@ -354,7 +353,9 @@ def create_model_and_update_fn(
             model.pseudo_u.assign(means_tensor)
             model.cluster_counts.assign(count_tensor)
         else:
-            model.inducing_variable.Z.assign(iv)
+            iv_dtype = model.inducing_variable.Z.dtype
+            iv_tensor = tf.cast(iv, dtype=iv_dtype)
+            model.inducing_variable.Z.assign(iv_tensor)
         return iv, means, count
 
     gpflow.utilities.set_trainable(model.inducing_variable, trainable_inducing_points)
