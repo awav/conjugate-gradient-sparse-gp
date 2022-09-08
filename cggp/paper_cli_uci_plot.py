@@ -74,13 +74,19 @@ def main(files: Sequence[Union[Path, str]]):
             key_value_pairs = list(zip(keys_sequence, query_values))
             full_query = foldl_queries(key_value_pairs)
             selected_rows = db.search(full_query)
+            if selected_rows == []:
+                continue
             df = pd.DataFrame(selected_rows)
             df = df.sort_values(by=ip_key)
             instructions = {metric: aggregation for metric in metrics}
             frame = df.groupby(by=ip_key).agg(instructions)
             processed_frames[name] = frame
+
+    if len(processed_frames) == 0:
+        raise RuntimeError("Data not found")
     
     # Plotting
+    figsize = ()
     fig, axes = plt.subplots(nrows=len(metrics))
     for i, metric in enumerate(metrics):
         ax = axes[i]
@@ -93,7 +99,8 @@ def main(files: Sequence[Union[Path, str]]):
         if i == 0:
             ax.legend()
     
-    plt.tight_layout()
+    axes[-1].set_yscale("log")
+    # plt.tight_layout()
     plt.show()
     click.echo(f"Finished")
 
