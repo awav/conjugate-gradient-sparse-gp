@@ -262,7 +262,7 @@
             },
             "justMyCode": false,
             "args": [
-                "${workspaceFolder}/cggp/logs/uci/${input:dataset}/*j1e-1/*/results.json",
+                "${workspaceFolder}/cggp/logs/uci/${input:dataset}/*j1e-6/111/results.json",
             ],
         },
     ],

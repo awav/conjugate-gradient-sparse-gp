@@ -9,6 +9,7 @@ import click
 import gpflow
 import numpy as np
 import tensorflow as tf
+import tensorflow_probability as tfp
 
 from selection import kmeans_lloyd, oips, uniform
 from distance import create_distance_fn, DistanceType
@@ -176,6 +177,13 @@ def create_gpr_model(
     default_variance = 0.1
 
     kernel = kernel_fn(dim)
+    variance = kernel.variance.numpy()
+    dtype = kernel.variance.dtype
+    low = tf.cast(1e-6, dtype)
+    high = tf.cast(500., dtype)
+    transform = tfp.bijectors.Sigmoid(low=low, high=high)
+    # NOTE(awav): This constraint is necessary for efficient learning of low-noise problems.
+    kernel.variance = gpflow.Parameter(variance, transform=transform)
     model = gpflow.models.GPR(train_data, kernel, noise_variance=default_variance, **model_kwargs)
 
     return model
