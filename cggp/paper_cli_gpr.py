@@ -3,6 +3,7 @@ import json
 import click
 import tensorflow as tf
 import numpy as np
+import gpflow
 from gpflow.utilities import parameter_dict
 from utils import store_as_npy, to_numpy, store_as_json
 from pathlib import Path
@@ -49,6 +50,7 @@ def main(
     """
     This is a core command for all CLI functions.
     """
+    gpflow.config.set_default_positive_minimum(1e-6)
     use_jit = jit
     np.random.seed(seed)
     tf.random.set_seed(seed)
@@ -93,7 +95,7 @@ def main(
 
     click.echo("★★★ Start training ★★★")
 
-    for _ in range(1):
+    for i in range(1):
         result = train_using_lbfgs_and_update(
             train_data,
             model,
@@ -103,7 +105,7 @@ def main(
             monitor=monitor,
             use_jit=use_jit,
         )
-    click.echo("✪✪✪ Training finished ✪✪✪")
+        click.echo(f"✪✪✪ Training finished (phase {i}) ✪✪✪")
 
     params = parameter_dict(model)
     params_np = to_numpy(params)
