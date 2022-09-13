@@ -11,7 +11,7 @@ import numpy as np
 import tensorflow as tf
 import tensorflow_probability as tfp
 
-from selection import kmeans_lloyd, oips, uniform
+from selection import kmeans_lloyd, oips, uniform, greedy_selection
 from distance import create_distance_fn, DistanceType
 from optimize import (
     kmeans_update_inducing_parameters,
@@ -27,7 +27,7 @@ from conjugate_gradient import ConjugateGradient
 ModelClass = TypeVar("ModelClass", type(LpSVGP), type(ClusterGP))
 ModelClassStr = Literal["sgpr", "cdgp"]
 ModelClassCallable = Callable
-ClusteringType = Literal["kmeans", "covertree", "oips", "uniform"]
+ClusteringType = Literal["kmeans", "covertree", "oips", "uniform", "greedy"]
 DatasetCallable = Callable[[int], DatasetBundle]
 
 PrecisionName = Literal["fp32", "fp64"]
@@ -186,8 +186,8 @@ def create_kmeans_update_fn(
     model,
     data,
     use_jit: bool = True,
-    num_inducing_points: int = 1,
-    distance_type: DistanceType = "covariance",
+    max_points: int = 1,
+    distance_type: DistanceType = "euclidean",
 ):
     x, _ = data
     distance_fn = create_distance_fn(model.kernel, distance_type)
@@ -197,7 +197,7 @@ def create_kmeans_update_fn(
     def clustering_fn():
         iv_init = model.inducing_variable.Z
         iv, _ = kmeans_lloyd(
-            x, num_inducing_points, initial_centroids=iv_init, distance_fn=distance_fn
+            x, max_points, initial_centroids=iv_init, distance_fn=distance_fn
         )
         return iv
 
@@ -207,12 +207,33 @@ def create_kmeans_update_fn(
     return update_fn
 
 
+def create_greedy_update_fn(
+    model,
+    data,
+    use_jit: bool = True,
+    max_points: int = 1,
+    distance_type: DistanceType = "euclidean",
+):
+    distance_fn = create_distance_fn(model.kernel, distance_type)
+    distance_fn = jit(use_jit)(distance_fn)
+    kernel = model.kernel
+
+    @jit(use_jit)
+    def greedy_fn(inputs):
+        return greedy_selection(kernel, inputs, max_points)
+
+    def update_fn():
+        return oips_update_inducing_parameters(model, data, greedy_fn, distance_fn)
+
+    return update_fn
+
+
 def create_covertree_update_fn(
     model,
     data,
     use_jit: bool = True,
     spatial_resolution: float = 1.0,
-    distance_type: DistanceType = "covariance",
+    distance_type: DistanceType = "euclidean",
 ):
     distance_fn = create_distance_fn(model.kernel, distance_type)
     distance_fn = jit(use_jit)(distance_fn)
@@ -229,7 +250,7 @@ def create_oips_update_fn(
     rho: float = 0.5,
     use_jit: bool = True,
     max_points: Optional[int] = None,
-    distance_type: DistanceType = "covariance",
+    distance_type: DistanceType = "euclidean",
 ):
     """
     By default method will use half of the size of
@@ -258,7 +279,7 @@ def create_uniform_update_fn(
     data,
     max_points: int,
     use_jit: bool = True,
-    distance_type: DistanceType = "covariance",
+    distance_type: DistanceType = "euclidean",
 ):
     """
     By default method will use half of the size of
@@ -287,7 +308,7 @@ def create_update_fn(
     model,
     data,
     use_jit: bool = True,
-    distance_type: DistanceType = "covariance",
+    distance_type: DistanceType = "euclidean",
     **clustering_kwargs,
 ):
     if clustering_type == "kmeans":
@@ -306,6 +327,10 @@ def create_update_fn(
         return create_uniform_update_fn(
             model, data, use_jit=use_jit, distance_type=distance_type, **clustering_kwargs
         )
+    elif clustering_type == "greedy":
+        return create_greedy_update_fn(
+            model, data, use_jit=use_jit, distance_type=distance_type, **clustering_kwargs
+        )
     raise ValueError(f"Unknown value for {clustering_type}")
 
 
@@ -322,7 +347,7 @@ def create_model_and_update_fn(
     train_data,
     clustering_type: ClusteringType,
     use_jit: bool = True,
-    distance_type: DistanceType = "covariance",
+    distance_type: DistanceType = "euclidean",
     trainable_inducing_points: bool = False,
     model_kwargs: Optional[Dict] = None,
     clustering_kwargs: Optional[Dict] = None,

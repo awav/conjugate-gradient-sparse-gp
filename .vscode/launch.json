@@ -170,7 +170,7 @@
             ],
         },
         {
-            "name": "Compute metrics (either kmeans or uniform)",
+            "name": "Compute metrics (either kmeans, uniform or greedy)",
             "type": "python",
             "request": "launch",
             "program": "${workspaceFolder}/cggp/paper_cli_uci.py",
@@ -190,10 +190,10 @@
                 "1e-6",
                 "--config-dir",
                 "${workspaceFolder}/cggp/logs/gpr/${input:dataset}/gpr_matern32_i1000/111",
-                "--no-jit",
+                "${input:jit}",
                 "${input:selection}",
                 "-m",
-                "2000",
+                "200",
                 "compute-metrics",
             ],
         },
@@ -269,6 +269,16 @@
     "inputs": [
         {
             "type": "pickString",
+            "id": "jit",
+            "description": "Use JIT option",
+            "default": "--no-jit",
+            "options": [
+                "--no-jit",
+                "--jit",
+            ]
+        },
+        {
+            "type": "pickString",
             "id": "dataset",
             "description": "Datasets",
             "default": "elevators",
@@ -287,6 +297,7 @@
             "options": [
                 "uniform",
                 "kmeans",
+                "greedy",
             ]
         },
         {

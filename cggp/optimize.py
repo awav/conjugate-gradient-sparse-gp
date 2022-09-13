@@ -45,7 +45,7 @@ def oips_update_inducing_parameters(
     distance_fn,
 ) -> Tuple[Tensor, Tensor, Tensor]:
     inputs, outputs = data
-    iv = oips_fn(inputs)
+    iv, iv_indices = oips_fn(inputs)
     m = tf.shape(iv)[0]
     cross_distances = ops.square_distance(iv, inputs)
     max_distance_indices = tf.argmin(cross_distances, axis=0)
