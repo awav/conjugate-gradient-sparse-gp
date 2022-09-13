@@ -160,10 +160,10 @@
                 "--dataset",
                 "naval",
                 "--seed",
-                "111",
+                "444",
                 "--jit",
                 "--num-iterations",
-                "100",
+                "20",
                 "--test-batch-size",
                 "2000",
                 "--no-tensorboard"

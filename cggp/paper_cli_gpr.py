@@ -31,6 +31,7 @@ from optimize import (
 @click.option("-l", "--logdir", type=LogdirPath(), default=LogdirPath.default_logdir)
 @click.option("-n", "--num-iterations", type=int, required=True)
 @click.option("-d", "--dataset", type=DatasetType(), required=True)
+@click.option("-pm", "--positive-minimum", type=float, default=1e-6)
 @click.option("-k", "--kernel", type=KernelType(), default="se")
 @click.option("-tb", "--test-batch-size", type=int)
 @click.option("-r", "--record-step", type=int)
@@ -42,6 +43,7 @@ def main(
     dataset: DatasetCallable,
     kernel: Callable,
     test_batch_size: Optional[int],
+    positive_minimum: float,
     num_iterations: int,
     record_step: Optional[int],
     jit: bool,
@@ -50,7 +52,7 @@ def main(
     """
     This is a core command for all CLI functions.
     """
-    gpflow.config.set_default_positive_minimum(1e-6)
+    gpflow.config.set_default_positive_minimum(positive_minimum)
     use_jit = jit
     np.random.seed(seed)
     tf.random.set_seed(seed)
