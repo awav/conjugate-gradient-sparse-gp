@@ -88,7 +88,8 @@ def oips(kernel: gpflow.kernels.Kernel, inputs: Tensor, rho: float, max_points: 
         point = inputs[i : i + 1]
         kix = kernel(point, inducing_points)
         weight = tf.math.reduce_max(kix)
-        if weight < rho:
+        scale = kxx[i]
+        if weight < rho * scale:
             new_inducing_points = tf.concat([inducing_points, point], axis=0)
             new_indices = tf.concat([indices, [i]], axis=0)
             return [i + 1, j + 1, new_inducing_points, new_indices]
@@ -96,10 +97,10 @@ def oips(kernel: gpflow.kernels.Kernel, inputs: Tensor, rho: float, max_points: 
 
     i0 = tf.constant(1)
     j0 = tf.constant(1)
-    initial_state = [i0, j0, inducing_points]
+    initial_state = [i0, j0, inducing_points, indices]
     shapes = [i0.shape, j0.shape, tf.TensorShape([None, inputs.shape[-1]]), tf.TensorShape([None])]
     result = tf.while_loop(cond, body, initial_state, shape_invariants=shapes)
-    return result[-1]
+    return result[-2], result[-1]
 
 
 def uniform(inputs: Tensor, max_points: int) -> Tuple[Tensor, Tensor]:

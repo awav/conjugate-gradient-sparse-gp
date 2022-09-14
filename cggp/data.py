@@ -120,8 +120,8 @@ def load_data(
         train, test = east_africa(
             "~/.datasets/east_africa", train_proportion=split_proportion, seed=seed
         )
-    elif name == "naval":
-        dat = getattr(bbd, "Naval")(split=seed, prop=split_proportion)
+    elif name == "naval" or name == "power":
+        dat = getattr(bbd, name.title())(split=seed, prop=split_proportion)
         train, test = (dat.X_train, dat.Y_train), (dat.X_test, dat.Y_test)
     else:
         uci_name = name

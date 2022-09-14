@@ -47,7 +47,8 @@ uid = './{rootdir}/{dataset}/{name}_{model}_r{rho}_{precision}_j{jitter}/{seed}'
 name = "oips"
 rootdir = "logs/uci"
 
-rho = [0.001, 0.005, 0.01, 0.05, 0.1, 0.2, 0.4]
+# rho = [0.001, 0.005, 0.01, 0.05, 0.1, 0.2, 0.4]
+rho = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.99]
 
 model = ["sgpr"]
 # dataset = ["east_africa"]
@@ -65,6 +66,26 @@ cmd = '{cmd} {name} -m {max_ip} compute-metrics --logdir "{uid}"'
 uid = './{rootdir}/{dataset}/{name}_{model}_m{max_ip}_{precision}_j{jitter}/{seed}'
 
 name = "kmeans"
+rootdir = "logs/uci"
+
+max_ip = [100, 500, 1000, 2000, 3000, 4000, 5000]
+
+model = ["sgpr"]
+# dataset = ["east_africa"]
+dataset = ["east_africa", "naval"]
+precision = ["fp32", "fp64"]
+jitter = ["1e-8", "1e-6", "1e-4", "1e-2", "1e-1"]
+# jitter = "1e-6"
+# seed = [111]
+seed = [111, 222, 333, 444, 555, 666, 777, 888, 999]
+
+
+# Greedy. Experiment one.
+[[exp]]
+cmd = '{cmd} {name} -m {max_ip} compute-metrics --logdir "{uid}"'
+uid = './{rootdir}/{dataset}/{name}_{model}_m{max_ip}_{precision}_j{jitter}/{seed}'
+
+name = "greedy"
 rootdir = "logs/uci"
 
 max_ip = [100, 500, 1000, 2000, 3000, 4000, 5000]
