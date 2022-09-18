@@ -158,7 +158,7 @@
             "justMyCode": false,
             "args": [
                 "--dataset",
-                "naval",
+                "${input:dataset}",
                 "--seed",
                 "444",
                 "--jit",
@@ -315,6 +315,7 @@
                 "bike",
                 "elevators",
                 "naval",
+                "power",
                 "east_africa",
             ]
         },

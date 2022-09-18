@@ -12,7 +12,8 @@ resolution = [0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.1, 0.2, 0.3]
 
 model = ["sgpr"]
 # dataset = ["east_africa", "naval"]
-dataset = ["east_africa", "naval"]
+# dataset = ["east_africa", "naval"]
+dataset = ["east_africa", "naval", "power"]
 precision = ["fp32", "fp64"]
 jitter = ["1e-8", "1e-6", "1e-4", "1e-2", "1e-1"]
 # jitter = "1e-6"
@@ -31,7 +32,8 @@ max_ip = [100, 500, 1000, 2000, 3000, 4000, 5000]
 
 model = ["sgpr"]
 # dataset = ["east_africa"]
-dataset = ["east_africa", "naval"]
+# dataset = ["east_africa", "naval"]
+dataset = ["east_africa", "naval", "power"]
 precision = ["fp32", "fp64"]
 jitter = ["1e-8", "1e-6", "1e-4", "1e-2", "1e-1"]
 # jitter = "1e-6"
@@ -52,7 +54,8 @@ rho = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.99]
 
 model = ["sgpr"]
 # dataset = ["east_africa"]
-dataset = ["east_africa", "naval"]
+# dataset = ["east_africa", "naval"]
+dataset = ["east_africa", "naval", "power"]
 precision = ["fp32", "fp64"]
 jitter = ["1e-8", "1e-6", "1e-4", "1e-2", "1e-1"]
 # jitter = "1e-6"
@@ -72,7 +75,8 @@ max_ip = [100, 500, 1000, 2000, 3000, 4000, 5000]
 
 model = ["sgpr"]
 # dataset = ["east_africa"]
-dataset = ["east_africa", "naval"]
+# dataset = ["east_africa", "naval"]
+dataset = ["east_africa", "naval", "power"]
 precision = ["fp32", "fp64"]
 jitter = ["1e-8", "1e-6", "1e-4", "1e-2", "1e-1"]
 # jitter = "1e-6"
@@ -92,7 +96,8 @@ max_ip = [100, 500, 1000, 2000, 3000, 4000, 5000]
 
 model = ["sgpr"]
 # dataset = ["east_africa"]
-dataset = ["east_africa", "naval"]
+# dataset = ["east_africa", "naval"]
+dataset = ["east_africa", "naval", "power"]
 precision = ["fp32", "fp64"]
 jitter = ["1e-8", "1e-6", "1e-4", "1e-2", "1e-1"]
 # jitter = "1e-6"

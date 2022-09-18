@@ -20,7 +20,7 @@ uid = './{rootdir}/{dataset}/gpr_{kernel}_i{maxiters}/{seed}'
 
 name = "gpr"
 rootdir = "logs/gpr"
-dataset = ["east_africa", "elevators"]
+dataset = ["east_africa", "elevators", "power"]
 maxiters = 1000
 kernel = "matern32"
 test_batchsize = 2000

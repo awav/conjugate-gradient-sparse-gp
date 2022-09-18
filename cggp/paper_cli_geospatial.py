@@ -248,6 +248,7 @@ def train_adam(
         test_data,
         test_batch_size,
         use_tensorboard=use_tb,
+        record_step=50,
         logdir=logdir,
     )
 

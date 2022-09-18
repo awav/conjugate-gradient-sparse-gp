@@ -70,6 +70,7 @@ class DatasetType(click.ParamType):
     name = "dataset"
     datasets: List[str] = [
         "snelson1d",
+        "power",
         "naval",
         "elevators",
         "bike",
