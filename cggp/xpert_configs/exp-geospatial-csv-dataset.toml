@@ -1,0 +1,15 @@
+cmd = 'python ./paper_cli_geospatial_dataset_csv.py -l "{uid}" -d {dataset} -s {seed}'
+
+# Covertree CDGP
+[[exp]]
+cmd = '{cmd} '
+uid = './{rootdir}/{dataset}/{seed}/'
+
+rootdir = "logs"
+dataset = "east_africa"
+seed = [111, 222, 333, 444, 555, 666, 777, 888, 999, 1000]
+
+[flags]
+restart = false
+num_proc = 1
+gpu_indices = []
