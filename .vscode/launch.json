@@ -75,6 +75,25 @@
             ],
         },
         {
+            "name": "Save dataset",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/cggp/paper_cli_geospatial_dataset_csv.py",
+            "console": "integratedTerminal",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}:${workspaceFolder}/cggp/:${env:PYTHONPATH}",
+                "CUDA_DEVICE_ORDER": "PCI_BUS_ID",
+                "CUDA_VISIBLE_DEVICES": "0",
+            },
+            "justMyCode": false,
+            "args": [
+                "--dataset",
+                "east_africa",
+                "--seed",
+                "111",
+            ],
+        },
+        {
             "name": "Test CLI kmeans v2",
             "type": "python",
             "request": "launch",
@@ -226,7 +245,6 @@
             ],
         },
         {
-        {
             "name": "Test covertree Exp-1",
             "type": "python",
             "request": "launch",
@@ -291,7 +309,23 @@
             },
             "justMyCode": false,
             "args": [
-                "${workspaceFolder}/cggp/logs/uci/${input:dataset}/*j1e-6/111/results.json",
+                "${workspaceFolder}/cggp/logs/uci/${input:dataset}/*${input:precision}*j${input:jitter}/*/results.json",
+            ],
+        },
+        {
+            "name": "CSV UCI metrics",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/cggp/paper_cli_uci_csv.py",
+            "console": "integratedTerminal",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}:${workspaceFolder}/cggp/:${env:PYTHONPATH}",
+            },
+            "justMyCode": false,
+            "args": [
+                "-o",
+                "${workspaceFolder}/cggp/logs-default/uci/${input:dataset}",
+                "${workspaceFolder}/cggp/logs/uci/${input:dataset}/*/*/results.json",
             ],
         },
     ],
@@ -317,6 +351,28 @@
                 "naval",
                 "power",
                 "east_africa",
+            ]
+        },
+        {
+            "type": "pickString",
+            "id": "precision",
+            "description": "Precision (fp32 | fp64)",
+            "default": "fp64",
+            "options": [
+                "fp32",
+                "fp64",
+            ]
+        },
+        {
+            "type": "pickString",
+            "id": "jitter",
+            "description": "Jitter",
+            "default": "1e-6",
+            "options": [
+                "1e-2",
+                "1e-4",
+                "1e-6",
+                "1e-8",
             ]
         },
         {
