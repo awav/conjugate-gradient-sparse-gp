@@ -13,6 +13,7 @@ import tensorflow_probability as tfp
 
 from selection import kmeans_lloyd, oips, uniform, greedy_selection
 from distance import create_distance_fn, DistanceType
+from scipy.cluster.vq import kmeans2
 from optimize import (
     kmeans_update_inducing_parameters,
     covertree_update_inducing_parameters,
@@ -27,7 +28,7 @@ from conjugate_gradient import ConjugateGradient
 ModelClass = TypeVar("ModelClass", type(LpSVGP), type(ClusterGP))
 ModelClassStr = Literal["sgpr", "cdgp"]
 ModelClassCallable = Callable
-ClusteringType = Literal["kmeans", "covertree", "oips", "uniform", "greedy"]
+ClusteringType = Literal["kmeans", "kmeans2", "covertree", "oips", "uniform", "greedy"]
 DatasetCallable = Callable[[int], DatasetBundle]
 
 PrecisionName = Literal["fp32", "fp64"]
@@ -197,10 +198,30 @@ def create_kmeans_update_fn(
     @jit(use_jit)
     def clustering_fn():
         iv_init = model.inducing_variable.Z
-        iv, _ = kmeans_lloyd(
-            x, max_points, initial_centroids=iv_init, distance_fn=distance_fn
-        )
+        iv, _ = kmeans_lloyd(x, max_points, initial_centroids=iv_init, distance_fn=distance_fn)
         return iv
+
+    def update_fn():
+        return kmeans_update_inducing_parameters(model, data, distance_fn, clustering_fn)
+
+    return update_fn
+
+
+def create_kmeans2_update_fn(
+    model,
+    data,
+    use_jit: bool = True,
+    max_points: int = 1,
+    distance_type: DistanceType = "euclidean",
+):
+    x, _ = data
+    distance_fn = create_distance_fn(model.kernel, distance_type)
+    distance_fn = jit(use_jit)(distance_fn)
+
+    def clustering_fn():
+        iv_init = model.inducing_variable.Z
+        iv, _ = kmeans2(x, max_points, minit="++")
+        return tf.convert_to_tensor(iv, dtype=iv_init.dtype)
 
     def update_fn():
         return kmeans_update_inducing_parameters(model, data, distance_fn, clustering_fn)
@@ -314,6 +335,10 @@ def create_update_fn(
 ):
     if clustering_type == "kmeans":
         return create_kmeans_update_fn(
+            model, data, use_jit=use_jit, distance_type=distance_type, **clustering_kwargs
+        )
+    elif clustering_type == "kmeans2":
+        return create_kmeans2_update_fn(
             model, data, use_jit=use_jit, distance_type=distance_type, **clustering_kwargs
         )
     elif clustering_type == "covertree":
