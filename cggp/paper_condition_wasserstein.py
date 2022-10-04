@@ -164,7 +164,7 @@ def paper_visualization():
     n = 1000
     b = 5
     dims = [1, 2, 4, 8]
-    num_samples = 5
+    num_samples = 20
     df_final = pd.DataFrame()
 
     for dim in dims:
