@@ -189,18 +189,21 @@ if __name__ == "__main__":
     oips_cmd = click_cmds.oips
     greedy_cmd = click_cmds.greedy
     kmeans_cmd = click_cmds.kmeans
+    kmeans2_cmd = click_cmds.kmeans2
     uniform_cmd = click_cmds.uniform
     covertree_cmd = click_cmds.covertree
 
     oips_cmd.add_command(compute_metrics, "compute-metrics")
     greedy_cmd.add_command(compute_metrics, "compute-metrics")
     kmeans_cmd.add_command(compute_metrics, "compute-metrics")
+    kmeans2_cmd.add_command(compute_metrics, "compute-metrics")
     uniform_cmd.add_command(compute_metrics, "compute-metrics")
     covertree_cmd.add_command(compute_metrics, "compute-metrics")
 
     main.add_command(oips_cmd, "oips")
     main.add_command(greedy_cmd, "greedy")
     main.add_command(kmeans_cmd, "kmeans")
+    main.add_command(kmeans2_cmd, "kmeans2")
     main.add_command(uniform_cmd, "uniform")
     main.add_command(covertree_cmd, "covertree")
 
