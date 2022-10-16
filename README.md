@@ -1,4 +1,4 @@
-# Fast Convergence of Conjugate Gradients in Sparse Gaussian Processes
+# Numerically Stable Sparse Gaussian Processes via Minimum Separation using Cover Trees
 
 ## Install develop version
 
@@ -14,48 +14,28 @@ To use UCI datasets you would also need to follow the installation instructions 
 
 The experiments script used for generating tables and plots are prefixed with `paper_*`:
 
-### `paper_cli.py`
+### `paper_cli_uci.py`
 
-Command line interface for training SGPR, LpSVGP and CDGP models.
+Command line interface for prediction using SGPR and CDGP models with loaded hyperparameters.
 
-```bash
-❯ python paper_cli.py --help
-Usage: paper_cli.py [OPTIONS] COMMAND [ARGS]...
+```
+Usage: paper_cli_uci.py [OPTIONS] COMMAND [ARGS]...
 
   This is a core command for all CLI functions.
 
 Options:
-  -d, --dataset DATASET  [required]
-  -p, --precision DTYPE
-  -j, --jitter FLOAT
-  -k, --kernel DATASET
-  -l, --logdir PATH
-  -s, --seed INTEGER
+  -mc, --model-class [sgpr|cdgp]  [required]
+  -p, --precision DTYPE           [required]
+  -j, --jitter FLOAT              [required]
+  -c, --config-dir PATH
   --jit / --no-jit
-  --help                 Show this message and exit.
+  --help                          Show this message and exit.
 
 Commands:
-  train-adam-covertree
+  covertree
+  greedy
+  kmeans
+  kmeans2
+  oips
+  uniform
 ```
-
-And usage of `train-adam-covertree` command:
-
-```bash
-❯ python paper_cli.py -d DATASET train-adam-covertree --help
-Usage: paper_cli.py train-adam-covertree [OPTIONS]
-
-Options:
-  -mc, --model-class [sgpr|cdgp]  [required]
-  -n, --num-iterations INTEGER    [required]
-  -s, --spatial-resolution FLOAT  [required]
-  -b, --batch-size INTEGER        [required]
-  -tb, --test-batch-size INTEGER
-  -l, --learning-rate FLOAT
-  -e, --error-threshold FLOAT
-  --tip / --no-tip
-  --help                          Show this message and exit.
-```
-
-
-### `paper_condition_wasserstein.py`
-
