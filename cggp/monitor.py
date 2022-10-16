@@ -65,7 +65,7 @@ class Monitor:
     def _handle_callback(self, step: int, name: str):
         cb, record_step, logs = self._callbacks[name]
 
-        if record_step is not None and step % record_step != 0:
+        if record_step is None or step % record_step != 0:
             return
 
         results = cb(step)

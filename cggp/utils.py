@@ -1,8 +1,9 @@
-from typing import Callable, Optional
+from typing import Callable, Optional, Union
 import tensorflow as tf
 from pathlib import Path
 from typing import Dict
 import numpy as np
+import json
 
 Tensor = tf.Tensor
 
@@ -25,10 +26,16 @@ def jit(apply: bool = True, **function_kwargs):
     return inner
 
 
-def store_logs(path: Path, logs: Dict):
+def store_as_npy(path: Path, logs: Dict):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     np.save(path, logs, allow_pickle=True)
+
+
+def load_from_npy(path: Path) -> Dict:
+    path = Path(path)
+    data = np.load(path, allow_pickle=True)
+    return data.item()
 
 
 def to_numpy(logs: Dict):
@@ -46,3 +53,13 @@ def transform_to_dataset(
     if repeat:
         data = data.repeat()
     return data
+
+
+def store_as_json(filename: Union[Path, str], obj):
+    with open(filename, "w") as fp:
+        json.dump(obj, fp)
+
+
+def load_from_json(filename: Union[Path, str]):
+    with open(filename, "r") as fp:
+        return json.load(fp)

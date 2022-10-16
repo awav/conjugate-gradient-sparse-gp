@@ -4,7 +4,7 @@ import click
 import tensorflow as tf
 import numpy as np
 import gpflow
-from utils import store_logs
+from utils import store_as_npy
 from pathlib import Path
 
 from data import DatasetBundle, to_float
@@ -17,6 +17,7 @@ from cli_utils import (
     cggp_class,
     sgpr_class,
     DatasetType,
+    DatasetCallable,
     KernelType,
     LogdirPath,
     FloatType,
@@ -50,7 +51,7 @@ def main(
     jitter: float,
     kernel: Callable,
     seed: int,
-    dataset: DatasetBundle,
+    dataset: DatasetCallable,
     jit: bool,
 ):
     """
@@ -61,10 +62,12 @@ def main(
     gpflow.config.set_default_float(precision)
     gpflow.config.set_default_jitter(jitter)
 
+    data = dataset(seed)
+
     obj = EntryContext(
         seed,
         str(logdir),
-        dataset,
+        data,
         kernel,
         jit,
         jitter,
@@ -99,14 +102,8 @@ def mean_variance(
     use_jit = obj.jit
     logdir = obj.logdir
     kernel_fn = obj.kernel_fn
-    train_data = (
-        to_float(dataset.train[0], as_tensor=True),
-        to_float(dataset.train[1], as_tensor=True),
-    )
-    test_data = (
-        to_float(dataset.test[0], as_tensor=True),
-        to_float(dataset.test[1], as_tensor=True),
-    )
+    train_data = dataset.train
+    test_data = dataset.test
 
     trainable_inducing_points = tip
 
@@ -166,10 +163,10 @@ def mean_variance(
 
     click.echo("✪✪✪ Mean and variance computation has finished ✪✪✪")
 
-    store_logs(Path(logdir, "train_mean.npy"), np.array(mean_train))
-    store_logs(Path(logdir, "test_mean.npy"), np.array(mean_test))
-    store_logs(Path(logdir, "train_variances.npy"), np.array(variances_train))
-    store_logs(Path(logdir, "test_variances.npy"), np.array(variances_test))
+    store_as_npy(Path(logdir, "train_mean.npy"), np.array(mean_train))
+    store_as_npy(Path(logdir, "test_mean.npy"), np.array(mean_test))
+    store_as_npy(Path(logdir, "train_variances.npy"), np.array(variances_train))
+    store_as_npy(Path(logdir, "test_variances.npy"), np.array(variances_test))
     click.echo("⭐⭐⭐ Script finished ⭐⭐⭐")
 
 

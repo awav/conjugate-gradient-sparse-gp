@@ -3,7 +3,7 @@ from functools import partial
 from gpflow.kernels import SquaredExponential
 import tensorflow as tf
 
-from kmeans import kmeans_lloyd, kmeans_indices_and_distances
+from selection import kmeans_lloyd, kmeans_indices_and_distances
 from distance import create_distance_fn
 
 

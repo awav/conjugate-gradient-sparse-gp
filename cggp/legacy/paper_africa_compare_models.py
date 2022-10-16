@@ -5,7 +5,7 @@ import tensorflow as tf
 import numpy as np
 import gpflow
 from gpflow.utilities import parameter_dict
-from utils import store_logs, to_numpy, jit
+from utils import store_as_npy, to_numpy, jit
 from pathlib import Path
 
 from cli_utils import create_model_and_covertree_update_fn
@@ -121,14 +121,14 @@ if __name__ == "__main__":
     )
     sgpr_params = parameter_dict(sgpr)
     sgpr_params_np = to_numpy(sgpr_params)
-    store_logs(Path(logdir_sgpr, "params.npy"), sgpr_params_np)
+    store_as_npy(Path(logdir_sgpr, "params.npy"), sgpr_params_np)
 
     sgpr_predict_fn = create_predict_fn(sgpr, use_jit=use_jit)
     sgpr_mean_train = batch_posterior_computation(sgpr_predict_fn, train_data, monitor_batch_size)
     sgpr_mean_test = batch_posterior_computation(sgpr_predict_fn, test_data, monitor_batch_size)
 
-    store_logs(Path(logdir_sgpr, "train_mean.npy"), np.array(sgpr_mean_train))
-    store_logs(Path(logdir_sgpr, "test_mean.npy"), np.array(sgpr_mean_test))
+    store_as_npy(Path(logdir_sgpr, "train_mean.npy"), np.array(sgpr_mean_train))
+    store_as_npy(Path(logdir_sgpr, "test_mean.npy"), np.array(sgpr_mean_test))
     # CGGP
     #
     logdir_cggp = f"{logdir}/cggp-{m}"
@@ -153,7 +153,7 @@ if __name__ == "__main__":
     )
     cggp_params = parameter_dict(cggp)
     cggp_params_np = to_numpy(cggp_params)
-    store_logs(Path(logdir_cggp, "params.npy"), cggp_params_np)
+    store_as_npy(Path(logdir_cggp, "params.npy"), cggp_params_np)
 
     cggp_predict_fn = create_predict_fn(cggp, use_jit=use_jit)
     cggp_mean_train, cggp_variance_train = batch_posterior_computation(
@@ -167,10 +167,10 @@ if __name__ == "__main__":
         monitor_batch_size,
     )
 
-    store_logs(Path(logdir_cggp, "train_mean.npy"), np.array(cggp_mean_train))
-    store_logs(Path(logdir_cggp, "train_variance.npy"), np.array(cggp_variance_train))
-    store_logs(Path(logdir_cggp, "test_mean.npy"), np.array(cggp_mean_test))
-    store_logs(Path(logdir_cggp, "test_variance.npy"), np.array(cggp_variance_test))
+    store_as_npy(Path(logdir_cggp, "train_mean.npy"), np.array(cggp_mean_train))
+    store_as_npy(Path(logdir_cggp, "train_variance.npy"), np.array(cggp_variance_train))
+    store_as_npy(Path(logdir_cggp, "test_mean.npy"), np.array(cggp_mean_test))
+    store_as_npy(Path(logdir_cggp, "test_variance.npy"), np.array(cggp_variance_test))
 
     # # ClusterGP
     # #

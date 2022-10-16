@@ -3,10 +3,11 @@ from typing import Callable, Optional, Union, Tuple
 import numpy as np
 import tensorflow as tf
 import gpflow
-from gpflow.utilities import parameter_dict
+from gpflow.utilities import parameter_dict, ops
 import tensorflow as tf
-from kmeans import kmeans_indices_and_distances
-from covertree import ModifiedCoverTree
+from selection import kmeans_indices_and_distances
+
+from covertree import CoverTree
 from models import ClusterGP, LpSVGP
 from utils import jit, transform_to_dataset
 from monitor import Monitor
@@ -21,20 +22,60 @@ def covertree_update_inducing_parameters(
     distance_fn,
     spatial_resolution: float,
 ) -> Tuple[Tensor, Tensor, Tensor]:
-    covertree = ModifiedCoverTree(distance_fn, data, spatial_resolution=spatial_resolution)
+    data = data[0].numpy(), data[1].numpy()
+    covertree = CoverTree(distance_fn, data, spatial_resolution=spatial_resolution)
     new_iv = covertree.centroids
     means, counts = covertree.cluster_mean_and_counts
+    new_iv = tf.convert_to_tensor(new_iv)
+    means = tf.convert_to_tensor(means)
+    counts = tf.convert_to_tensor(counts)
 
     filter_empty_clusters = tf.reshape(counts != 0.0, -1)
     new_iv = tf.boolean_mask(new_iv, filter_empty_clusters)
     means = tf.boolean_mask(means, filter_empty_clusters)
     counts = tf.boolean_mask(counts, filter_empty_clusters)
 
-    model.inducing_variable.Z.assign(new_iv)
-    model.pseudo_u.assign(means)
-    model.cluster_counts.assign(counts)
-
     return new_iv, means, counts
+
+
+def oips_update_inducing_parameters(
+    model,
+    data,
+    oips_fn,
+    distance_fn,
+) -> Tuple[Tensor, Tensor, Tensor]:
+    inputs, outputs = data
+    iv, iv_indices = oips_fn(inputs)
+    m = tf.shape(iv)[0]
+    cross_distances = ops.square_distance(iv, inputs)
+    max_distance_indices = tf.argmin(cross_distances, axis=0)
+
+    def mean_and_count_fn(label: int) -> Tuple[Tensor, Tensor]:
+        mask = max_distance_indices == label
+        int_dtype = max_distance_indices.dtype
+        neighbours = tf.boolean_mask(outputs, mask, axis=0)
+        count = tf.cast(tf.shape(neighbours)[0], int_dtype)
+        mean = tf.reduce_mean(neighbours)
+        return mean, count
+
+    labels = tf.range(m, dtype=tf.int64)
+    means, counts = tf.map_fn(
+        mean_and_count_fn,
+        labels,
+        fn_output_signature=(inputs.dtype, labels.dtype),
+    )
+
+    nonempty_clusters = counts != 0
+
+    new_counts = tf.where(nonempty_clusters, counts, tf.ones_like(counts))
+    new_iv = iv
+    new_means = means
+
+    # new_means = tf.boolean_mask(means, nonempty_clusters)
+    # new_counts = tf.boolean_mask(counts, nonempty_clusters)
+    # new_iv = tf.boolean_mask(iv, nonempty_clusters)
+
+    return new_iv, new_means, new_counts
 
 
 def kmeans_update_inducing_parameters(
@@ -53,10 +94,6 @@ def kmeans_update_inducing_parameters(
     u_init = tf.zeros([m, 1], dtype=new_iv.dtype)
     update_indices = tf.reshape(indices, [-1, 1])
     u = tf.tensor_scatter_nd_add(u_init, update_indices, y) / counts
-
-    model.inducing_variable.Z.assign(new_iv)
-    model.pseudo_u.assign(u)
-    model.cluster_counts.assign(counts)
 
     return new_iv, u, counts
 
@@ -115,7 +152,7 @@ def train_vanilla_using_lbfgs(
 
 def train_using_lbfgs_and_update(
     data,
-    model: Union[ClusterGP, gpflow.models.SGPR],
+    model: Union[ClusterGP, gpflow.models.SGPR, gpflow.models.GPR],
     max_num_iters: int,
     update_fn: Optional[Callable] = None,
     update_during_training: Optional[int] = None,
@@ -123,7 +160,7 @@ def train_using_lbfgs_and_update(
     use_jit: bool = True,
 ):
     lbfgs = gpflow.optimizers.Scipy()
-    options = dict(maxiter=max_num_iters)
+    options = dict(maxiter=max_num_iters, disp=True)
 
     if isinstance(model, gpflow.models.InternalDataTrainingLossMixin):
         loss_fn = model.training_loss_closure(compile=False)
@@ -245,7 +282,17 @@ def make_param_callback(model):
     return _callback
 
 
-def make_metrics_callback(model, train_data, test_data, batch_size: int, use_jit: bool = True):
+def make_metrics_callback(
+    model: Union[
+        gpflow.models.ExternalDataTrainingLossMixin, gpflow.models.InternalDataTrainingLossMixin
+    ],
+    train_data,
+    test_data,
+    batch_size: int,
+    use_jit: bool = True,
+    print_on: bool = True,
+    check_numerics: bool = True,
+):
     """
     Callback for computing test metrics (RMSE and NLPD)
     """
@@ -256,7 +303,7 @@ def make_metrics_callback(model, train_data, test_data, batch_size: int, use_jit
     def test_metrics_fn(data):
         x, y = data
         mu, var = model.predict_f(x)
-        lpd = model.likelihood.predict_log_density(mu, var, y)
+        lpd = model.likelihood.predict_log_density(x, mu, var, y)
         lpd = tf.reduce_sum(lpd)
         error = y - mu
         return error, lpd
@@ -267,17 +314,25 @@ def make_metrics_callback(model, train_data, test_data, batch_size: int, use_jit
 
     @jit(use_jit)
     def train_metrics_full_fn():
-        return model.elbo()
+        if isinstance(model, gpflow.models.GPR):
+            return -model.maximum_log_likelihood_objective()
+        else:
+            return model.elbo()
+
+    import click
+    import json
 
     def step_callback(step, *args, **kwargs):
         error = np.array([]).reshape(-1, 1)
         lpd = 0.0
         elbo = 0.0
 
+        n = 0
         for batch in test_dataset:
             batch_error, batch_log_density = test_metrics_fn(batch)
             lpd += batch_log_density.numpy()
             error = np.concatenate([error, batch_error.numpy()], axis=0)
+            n += batch_error.shape[0]
 
         if isinstance(model, gpflow.models.InternalDataTrainingLossMixin):
             elbo = train_metrics_full_fn().numpy()
@@ -287,8 +342,24 @@ def make_metrics_callback(model, train_data, test_data, batch_size: int, use_jit
                 elbo += batch_elbo.numpy()
 
         rmse = np.sqrt(np.mean(error**2))
-        nlpd = -lpd
-        return {"train/elbo": elbo, "test/rmse": rmse, "test/nlpd": nlpd}
+        nlpd = -lpd / n
+        metrics = {
+            "train/elbo": float(elbo),
+            "test/rmse": float(rmse),
+            "test/nlpd": float(nlpd),
+        }
+
+        if print_on:
+            metrics_fmt = {
+                k: np.format_float_scientific(v, precision=4) for k, v in metrics.items()
+            }
+            metrics_str = json.dumps(metrics_fmt)
+            click.echo(f"Step [{step}], metrics: {metrics_str}")
+
+        if check_numerics:
+            tf.debugging.check_numerics(elbo, f"The training ELBO has got an undefined value {elbo}")
+
+        return metrics
 
     return step_callback
 
@@ -299,16 +370,20 @@ def create_monitor(
     test_data,
     batch_size,
     logdir: Union[str, Path] = "./logs-default/",
+    record_step: Optional[int] = 5,
     use_jit: bool = True,
     use_tensorboard: bool = True,
 ) -> Monitor:
     monitor = Monitor(logdir, use_tensorboard=use_tensorboard)
-    print_callback = make_print_callback()
     param_callback = make_param_callback(model)
     metric_callback = make_metrics_callback(
-        model, train_data, test_data, batch_size, use_jit=use_jit
+        model,
+        train_data,
+        test_data,
+        batch_size,
+        use_jit=use_jit,
+        print_on=True,
     )
-    monitor.add_callback("print", print_callback)
     monitor.add_callback("params", param_callback)
-    monitor.add_callback("metrics", metric_callback, record_step=5)
+    monitor.add_callback("metrics", metric_callback, record_step=record_step)
     return monitor

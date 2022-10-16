@@ -3,11 +3,12 @@ from typing import Callable, Tuple, Optional
 import numpy as np
 import tensorflow as tf
 import gpflow
+import pandas as pd
 
 from distance import DistanceType
 from conjugate_gradient import ConjugateGradient, conjugate_gradient
 from models import ClusterGP, CGGP
-from cli_utils import create_model_and_covertree_update_fn, kernel_fn
+from cli_utils import create_model_and_update_fn, kernel_fn
 from utils import add_diagonal, jit
 
 import matplotlib.pyplot as plt
@@ -68,15 +69,25 @@ def gen_wasserstein_condition_numbers(
 
     x, y = data
 
-    def covertree_setup(spatial_resolution):
-        return create_model_and_covertree_update_fn(
-            model_cls, data, spatial_resolution, distance_type=distance_type
-        )
-
     def model_cls(kernel, likelihood, iv, **kwargs):
         error_threshold = 1e-6
         conjugate_gradient = ConjugateGradient(error_threshold)
         return CGGP(kernel, likelihood, iv, conjugate_gradient, **kwargs)
+
+    def covertree_setup(spatial_resolution):
+        clustering_type = "covertree"
+        clustering_kwargs = {"spatial_resolution": spatial_resolution}
+
+        model, update_fn = create_model_and_update_fn(
+            model_cls,
+            data,
+            clustering_type=clustering_type,
+            distance_type=distance_type,
+            use_jit=use_jit,
+            clustering_kwargs=clustering_kwargs,
+        )
+
+        return model, update_fn
 
     gpr_predict_fn = jit(use_jit)(gpr.predict_f)
     mu, cov = gpr_predict_fn(x, full_cov=True)
@@ -147,14 +158,14 @@ def paper_visualization():
     dtype = gpflow.config.default_float()
     distance_type = "euclidean"
     use_jit = True
-    resolutions = np.linspace(0.1, 2.0, 10)
+    resolutions = np.linspace(0.05, 4.0, 15)
+    # resolutions = np.linspace(0.1, 4.0, 4)
 
     n = 1000
     b = 5
-    # dims = [1, 2, 4, 8]
     dims = [1, 2, 4, 8]
-    num_samples = 5
-    data_frame = {"resolutions": resolutions}
+    num_samples = 20
+    df_final = pd.DataFrame()
 
     for dim in dims:
         print(f">>> Start processing dim = {dim}")
@@ -166,9 +177,10 @@ def paper_visualization():
         kernel.lengthscales.assign(lengthscales)
 
         yt = sample_gpr_prior(kernel, xt, num_samples=num_samples)
-        for s in range(num_samples):
-            print(f">>> Start processing sample = {s}")
-            data = (xt, yt[s])
+
+        for sample_id in range(num_samples):
+            print(f">>> Start processing sample = {sample_id}")
+            data = (xt, yt[sample_id])
             gpr = gpflow.models.GPR(data, kernel, noise_variance=noise)
 
             metrics = gen_wasserstein_condition_numbers(
@@ -182,25 +194,29 @@ def paper_visualization():
                 cg_iterations,
             ) = metrics
 
-            data_frame[f"condition_numbers_dim{dim}_s{s}"] = np.array(condition_numbers)
-            data_frame[f"num_inducing_points_{dim}_{s}"] = np.array(num_inducing_points)
-            data_frame[f"wasserstein_distances_{dim}_{s}"] = np.array(wasserstein_distances)
-            data_frame[f"cg_iterations_{dim}_{s}"] = np.array(cg_iterations)
+            df_dict = dict(
+                dimension=dim,
+                sample_id=sample_id,
+                resolutions=resolutions,
+                condition_numbers=condition_numbers,
+                num_inducing_points=num_inducing_points,
+                wasserstein_distances=np.array(wasserstein_distances),
+                cg_iterations=np.array(cg_iterations),
+            )
+            df = pd.DataFrame(df_dict)
+            df_final = pd.concat([df_final, df])
 
             plot(data, noise, resolutions, *metrics)
 
     dirpath = str(Path(Path(__file__).parent))
-    store_metrics(dirpath, noise, lengthscale, data_frame)
+    store_metrics(dirpath, noise, lengthscale, df_final)
     print()
 
 
 def store_metrics(dirpath, noise, lengthscale, storage):
-    import pandas as pd
-
-    df = pd.DataFrame(data=storage)
     filename = f"metric_data_noise_{noise}_lengthscale_{lengthscale}.csv"
     filepath = str(Path(dirpath, filename))
-    df.to_csv(filepath)
+    storage.to_csv(filepath)
 
 
 def plot(
@@ -210,6 +226,7 @@ def plot(
     condition_numbers,
     num_inducing_points,
     wasserstein_distances,
+    cg_iterations,
 ):
     x, y = data
     x, y = np.array(x), np.array(y)

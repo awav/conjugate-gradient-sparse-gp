@@ -60,7 +60,7 @@ def snelson1d(target_dir: str = ".datasets/snelson1d"):
     return (X, Y), (X, Y)
 
 
-def east_africa(dirpath: str):
+def east_africa(dirpath: str, train_proportion: int = 0.7, seed: int = 0):
     import pandas as pd
 
     test_filename = "east_africa_test.csv"
@@ -74,6 +74,26 @@ def east_africa(dirpath: str):
     train = np.array(pd.read_csv(train_filepath))
     train_x, train_y = train[:, :-1], train[:, -1:]
     train_data = train_x, train_y
+
+    x = np.concatenate([train_x, test_x], axis=0)
+    y = np.concatenate([train_y, test_y], axis=0)
+
+    n = x.shape[0]
+    ind = np.arange(x.shape[0])
+    rng = np.random.RandomState(seed)
+    rng.shuffle(ind)
+
+    n_train = int(np.floor(train_proportion * n))
+    train_ind = ind[:n_train]
+    x_train = x[train_ind]
+    y_train = y[train_ind]
+
+    test_ind = ind[n_train:]
+    x_test = x[test_ind]
+    y_test = y[test_ind]
+
+    train_data = x_train, y_train
+    test_data = x_test, y_test
 
     return train_data, test_data
 
@@ -90,17 +110,25 @@ def norm_dataset(data: Dataset) -> Dataset:
     return norm(data[0]), norm(data[1])
 
 
-def load_data(name: str, as_tensor: bool = True, normalise: bool = True) -> DatasetBundle:
+def load_data(
+    name: str, as_tensor: bool = True, normalise: bool = True, seed: int = 0
+) -> DatasetBundle:
+    split_proportion = 0.67
     if name == "snelson1d":
         train, test = snelson1d("~/.dataset/snelson1d/")
     elif name == "east_africa":
-        train, test = east_africa("~/.datasets/east_africa")
+        train, test = east_africa(
+            "~/.datasets/east_africa", train_proportion=split_proportion, seed=seed
+        )
+    elif name == "naval" or name == "power":
+        dat = getattr(bbd, name.title())(split=seed, prop=split_proportion)
+        train, test = (dat.X_train, dat.Y_train), (dat.X_test, dat.Y_test)
     else:
         uci_name = name
         if not name.startswith("Wilson_"):
             uci_name = f"Wilson_{name}"
 
-        dat = getattr(bbd, uci_name)(prop=0.67)
+        dat = getattr(bbd, uci_name)(split=seed, prop=split_proportion)
         train, test = (dat.X_train, dat.Y_train), (dat.X_test, dat.Y_test)
 
     if normalise:

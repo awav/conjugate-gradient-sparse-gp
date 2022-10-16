@@ -22,6 +22,7 @@ def eval_logdet(matrix, cg, num_probes=None):
     """
     If num_probes is None solve against identity, else use a Rademacher based trace estimator
     """
+
     @tf.custom_gradient
     def _eval_logdet(matrix):
         dtype = matrix.dtype
@@ -34,9 +35,9 @@ def eval_logdet(matrix, cg, num_probes=None):
                 KmmLambdaInv = tf.transpose(KmmLambdaInv)
                 return df * KmmLambdaInv
             else:
-                shape = (n, num_probes) 
+                shape = (n, num_probes)
                 probes = tfpr.rademacher(shape, dtype=dtype)
-                rv = df * probes # valid since logdet is a scalar
+                rv = df * probes  # valid since logdet is a scalar
                 lv = cg(matrix, probes)
                 mat = tf.matmul(lv, rv, transpose_b=True) / tf.cast(num_probes, dtype=dtype)
                 # mat = 0.5 * (mat + tf.transpose(mat)) # symmetrize?
@@ -128,7 +129,7 @@ class LpSVGP(gpflow.models.GPModel, gpflow.models.ExternalDataTrainingLossMixin)
         x, y = data
         kl = self.prior_kl()
         f_mean, f_var = self.predict_f(x, full_cov=False, full_output_cov=False)
-        var_exp = self.likelihood.variational_expectations(f_mean, f_var, y)
+        var_exp = self.likelihood.variational_expectations(x, f_mean, f_var, y)
         scale = self.scale(tf.shape(x)[0], kl.dtype)
         return tf.reduce_sum(var_exp) * scale - kl
 
@@ -277,7 +278,13 @@ class ClusterGP(LpSVGP):
 
 class CGGP(ClusterGP):
     def __init__(
-        self, kernel, likelihood, inducing_variable, conjugate_gradient: ConjugateGradient, num_probes: int= None, **kwargs
+        self,
+        kernel,
+        likelihood,
+        inducing_variable,
+        conjugate_gradient: ConjugateGradient,
+        num_probes: int = 5,
+        **kwargs,
     ):
         super().__init__(kernel, likelihood, inducing_variable, **kwargs)
         self.conjugate_gradient = conjugate_gradient
@@ -299,18 +306,18 @@ class CGGP(ClusterGP):
             trace = tf.linalg.trace(KmmLambdaInv_Kmm)
         else:
             n = tf.shape(KmmLambda)[0]
-            shape = (n, self.num_probes) 
+            shape = (n, self.num_probes)
             probes = tfpr.rademacher(shape, dtype=KmmLambda.dtype)
             KmmLambdaInv_probes = self.conjugate_gradient(KmmLambda, probes)
-            Kmmprobes = tf.matmul(Kmm, probes) 
+            Kmmprobes = tf.matmul(Kmm, probes)
             trace_scaled = tf.reduce_sum(KmmLambdaInv_probes * Kmmprobes)
-            trace = trace_scaled / tf.cast(self.num_probes, dtype = trace_scaled.dtype)
+            trace = trace_scaled / tf.cast(self.num_probes, dtype=trace_scaled.dtype)
 
         quad_Kmm_KmmLambdaInv_u = tf.matmul(Kmm, KmmLambdaInv_u) * KmmLambdaInv_u
         quad = tf.reduce_sum(quad_Kmm_KmmLambdaInv_u)
 
         logdet = eval_logdet(KmmLambda, self.conjugate_gradient, num_probes=self.num_probes)
-        
+
         const = tf.reduce_sum(tf.math.log(var))
         return 0.5 * (quad - trace + logdet - const)
 
@@ -333,8 +340,8 @@ class CGGP(ClusterGP):
         KmmLambdaInv_Kmn = self.conjugate_gradient(KmmLambda, Kmn)
 
         if not full_cov:
-            diag_Knm_KmmLambdaInv_Kmn = tf.reduce_sum(Kmn * KmmLambdaInv_Kmn, axis=0)     
-            fvar = Knn - diag_Knm_KmmLambdaInv_Kmn 
+            diag_Knm_KmmLambdaInv_Kmn = tf.reduce_sum(Kmn * KmmLambdaInv_Kmn, axis=0)
+            fvar = Knn - diag_Knm_KmmLambdaInv_Kmn
             fvar = fvar[:, None]
         else:
             Knm_KmmLambdaInv_Kmn = tf.matmul(Kmn, KmmLambdaInv_Kmn, transpose_a=True)

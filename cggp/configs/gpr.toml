@@ -1,0 +1,33 @@
+cmd = 'python ./paper_cli_gpr.py -l "{uid}" -d {dataset} -k {kernel} -s {seed} --jit -n {maxiters} -tb {test_batchsize} --tensorboard'
+
+# GPR naval dataset
+[[exp]]
+cmd = '{cmd} -pm "1e-4"'
+uid = './{rootdir}/{dataset}/gpr_{kernel}_i{maxiters}/{seed}'
+
+name = "gpr"
+rootdir = "logs/gpr"
+dataset = ["naval"]
+maxiters = 20
+kernel = "matern32"
+test_batchsize = 2000
+seed = [111, 222, 333, 444, 555, 666, 777, 888, 999]
+
+# GPR
+[[exp]]
+cmd = '{cmd}'
+uid = './{rootdir}/{dataset}/gpr_{kernel}_i{maxiters}/{seed}'
+
+name = "gpr"
+rootdir = "logs/gpr"
+dataset = ["east_africa", "elevators", "power"]
+maxiters = 1000
+kernel = "matern32"
+test_batchsize = 2000
+seed = [111, 222, 333, 444, 555, 666, 777, 888, 999]
+
+
+[flags]
+restart = false
+num_proc = 3
+gpu_indices = ["0", "1", "2"]
