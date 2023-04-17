@@ -109,7 +109,9 @@ def main(
 @click.option("-l", "--logdir", type=LogdirPath(), default=LogdirPath.default_logdir)
 @click.option("-tb", "--test-batch-size", type=int)
 @click.pass_context
-def compute_metrics(ctx: click.Context, logdir: Path, test_batch_size: Union[int, None]):
+def compute_metrics(
+    ctx: click.Context, logdir: Path, test_batch_size: Union[int, None]
+):
     common_ctx = ctx.obj["common_ctx"]
     ip_ctx = ctx.obj["ip_ctx"]
 
@@ -186,25 +188,20 @@ def covariance_properties(
 
 
 if __name__ == "__main__":
-    oips_cmd = click_cmds.oips
-    greedy_cmd = click_cmds.greedy
-    kmeans_cmd = click_cmds.kmeans
-    kmeans2_cmd = click_cmds.kmeans2
-    uniform_cmd = click_cmds.uniform
-    covertree_cmd = click_cmds.covertree
+    cmds = {
+        "oips": click_cmds.oips,
+        "greedy": click_cmds.greedy,
+        "kmeans": click_cmds.kmeans,
+        "kmeans2": click_cmds.kmeans2,
+        "uniform": click_cmds.uniform,
+        "covertree": click_cmds.covertree,
+        "grad-ip": click_cmds.grad_ip,
+    }
 
-    oips_cmd.add_command(compute_metrics, "compute-metrics")
-    greedy_cmd.add_command(compute_metrics, "compute-metrics")
-    kmeans_cmd.add_command(compute_metrics, "compute-metrics")
-    kmeans2_cmd.add_command(compute_metrics, "compute-metrics")
-    uniform_cmd.add_command(compute_metrics, "compute-metrics")
-    covertree_cmd.add_command(compute_metrics, "compute-metrics")
-
-    main.add_command(oips_cmd, "oips")
-    main.add_command(greedy_cmd, "greedy")
-    main.add_command(kmeans_cmd, "kmeans")
-    main.add_command(kmeans2_cmd, "kmeans2")
-    main.add_command(uniform_cmd, "uniform")
-    main.add_command(covertree_cmd, "covertree")
+    _ = [
+        cmd.add_command(compute_metrics, "compute-metrics")
+        for _name, cmd in cmds.items()
+    ]
+    _ = [main.add_command(cmd, name) for name, cmd in cmds.items()]
 
     main()
