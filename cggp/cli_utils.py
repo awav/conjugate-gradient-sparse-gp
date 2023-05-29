@@ -541,7 +541,7 @@ def batch_posterior_computation(predict_fn, data, batch_size):
     data = transform_to_dataset(data, repeat=False, batch_size=batch_size)
     means = []
     variances = []
-    for (x, y) in data:
+    for x, y in data:
         mean, variance = predict_fn(x)
         means.append(mean.numpy())
         variances.append(variance.numpy())
