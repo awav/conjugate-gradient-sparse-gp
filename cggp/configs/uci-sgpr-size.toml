@@ -1,0 +1,136 @@
+cmd = 'python ./paper_cli_sizes.py --jit -mc {model} -df {data_fraction} --precision {precision} --jitter {jitter} --config-dir /home/artem/code/conjugate-gradient-sparse-gp/cggp/logs/gpr/{dataset}/gpr_matern32_i*/{seed} '
+
+# Covertree. Experiment one.
+[[exp]]
+cmd = '{cmd} {name} -s {resolution} compute-metrics --logdir "{uid}"'
+uid = './{rootdir}/{dataset}_{data_fraction}/{name}_{model}_s{resolution}_{precision}_j{jitter}/{seed}'
+
+name = "covertree"
+rootdir = "logs/uci"
+
+data_fraction = [0.1, 0.25, 0.5, 0.75, 0.9, 1.0]
+resolution = [0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.1, 0.2, 0.3]
+
+model = ["sgpr"]
+dataset = ["east_africa", "naval", "power"]
+precision = "fp32"
+jitter = "1e-6"
+seed = [111, 222, 333, 444, 555, 666, 777, 888, 999]
+# seed = [111]
+
+# Uniform. Experiment one.
+[[exp]]
+cmd = '{cmd} {name} -m {max_ip} compute-metrics --logdir "{uid}"'
+uid = './{rootdir}/{dataset}_{data_fraction}/{name}_{model}_m{max_ip}_{precision}_j{jitter}/{seed}'
+
+name = "uniform"
+rootdir = "logs/uci"
+
+data_fraction = [0.1, 0.25, 0.5, 0.75, 0.9, 1.0]
+max_ip = [100, 500, 1000, 2000, 3000, 4000, 5000]
+
+model = ["sgpr"]
+dataset = ["east_africa", "naval", "power"]
+precision = "fp32"
+jitter = "1e-6"
+# seed = [111]
+seed = [111, 222, 333, 444, 555, 666, 777, 888, 999]
+
+
+# Oips. Experiment one.
+[[exp]]
+cmd = '{cmd} {name} --rho {rho} compute-metrics --logdir "{uid}"'
+uid = './{rootdir}/{dataset}_{data_fraction}/{name}_{model}_r{rho}_{precision}_j{jitter}/{seed}'
+
+name = "oips"
+rootdir = "logs/uci"
+
+data_fraction = [0.1, 0.25, 0.5, 0.75, 0.9, 1.0]
+rho = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.99]
+
+model = ["sgpr"]
+dataset = ["east_africa", "naval", "power"]
+precision = "fp32"
+jitter = "1e-6"
+# seed = [111]
+seed = [111, 222, 333, 444, 555, 666, 777, 888, 999]
+
+
+# KMeans. Experiment one.
+[[exp]]
+cmd = '{cmd} {name} -m {max_ip} compute-metrics --logdir "{uid}"'
+uid = './{rootdir}/{dataset}_{data_fraction}/{name}_{model}_m{max_ip}_{precision}_j{jitter}/{seed}'
+
+name = "kmeans"
+rootdir = "logs/uci"
+
+data_fraction = [0.1, 0.25, 0.5, 0.75, 0.9, 1.0]
+max_ip = [100, 500, 1000, 2000, 3000, 4000, 5000]
+
+model = ["sgpr"]
+dataset = ["east_africa", "naval", "power"]
+precision = "fp32"
+jitter = "1e-6"
+seed = [111, 222, 333, 444, 555, 666, 777, 888, 999]
+
+
+# Greedy. Experiment one.
+[[exp]]
+cmd = '{cmd} {name} -m {max_ip} compute-metrics --logdir "{uid}"'
+uid = './{rootdir}/{dataset}_{data_fraction}/{name}_{model}_m{max_ip}_{precision}_j{jitter}/{seed}'
+
+name = "greedy"
+rootdir = "logs/uci"
+
+data_fraction = [0.1, 0.25, 0.5, 0.75, 0.9, 1.0]
+max_ip = [100, 500, 1000, 2000, 3000, 4000, 5000]
+
+model = ["sgpr"]
+dataset = ["east_africa", "power", "naval"]
+precision = "fp32"
+jitter = "1e-6"
+# seed = [111]
+seed = [111, 222, 333, 444, 555, 666, 777, 888, 999]
+
+# KMeans++. Experiment one.
+[[exp]]
+cmd = '{cmd} {name} -m {max_ip} compute-metrics --logdir "{uid}"'
+uid = './{rootdir}/{dataset}_{data_fraction}/{name}_{model}_m{max_ip}_{precision}_j{jitter}/{seed}'
+
+name = "kmeans2"
+rootdir = "logs/uci"
+
+data_fraction = [0.1, 0.25, 0.5, 0.75, 0.9, 1.0]
+max_ip = [100, 500, 1000, 2000, 3000, 4000, 5000]
+
+model = ["sgpr"]
+dataset = ["east_africa", "power", "naval"]
+precision = "fp32"
+jitter = "1e-6"
+seed = [111, 222, 333, 444, 555, 666, 777, 888, 999]
+
+
+# Gradient Inducing Points. Experiment one.
+[[exp]]
+cmd = '{cmd} {name} -m {max_ip} compute-metrics --logdir "{uid}"'
+uid = './{rootdir}/{dataset}_{data_fraction}/{name}_{model}_m{max_ip}_{precision}_j{jitter}/{seed}'
+
+name = "grad_ip"
+rootdir = "logs/uci"
+
+data_fraction = [0.1, 0.25, 0.5, 0.75, 0.9, 1.0]
+max_ip = [100, 500, 1000, 2000, 3000, 4000, 5000]
+
+model = ["sgpr"]
+dataset = ["east_africa", "power", "naval"]
+precision = ["fp32", "fp64"]
+jitter = ["1e-8", "1e-6", "1e-4", "1e-2", "1e-1"]
+seed = [111, 222, 333, 444, 555, 666, 777, 888, 999]
+
+
+[flags]
+restart = false
+# num_proc = 1
+# gpu_indices = ["0"]
+num_proc = 3
+gpu_indices = ["0", "1", "2"]
