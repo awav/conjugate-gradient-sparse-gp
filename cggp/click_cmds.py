@@ -51,6 +51,13 @@ def kmeans(ctx: click.Context, max_num_ip: int, distance_type: DistanceType):
     clustering_type = "kmeans"
     clustering_kwargs = {"max_points": max_num_ip}
 
+    train_data = common_ctx["dataset"].train
+    datasize = train_data[0].shape[0]
+    if max_num_ip > train_data[0].shape[0]:
+        raise click.Abort(
+            f"Too many inducing points requested for data size {datasize}"
+        )
+
     model, update_fn = create_model_and_update_fn(
         common_ctx["model_class_fn"],
         common_ctx["dataset"].train,
@@ -79,6 +86,13 @@ def kmeans2(ctx: click.Context, max_num_ip: int, distance_type: DistanceType):
 
     clustering_type = "kmeans"
     clustering_kwargs = {"max_points": max_num_ip}
+
+    train_data = common_ctx["dataset"].train
+    datasize = train_data[0].shape[0]
+    if max_num_ip > train_data[0].shape[0]:
+        raise click.Abort(
+            f"Too many inducing points requested for data size {datasize}"
+        )
 
     model, update_fn = create_model_and_update_fn(
         common_ctx["model_class_fn"],
@@ -145,6 +159,13 @@ def grad_ip(
     clustering_type: ClusteringType = "grad_ip"
     clustering_kwargs = {"num_iterations": num_iterations, "max_points": max_num_ip}
 
+    train_data = common_ctx["dataset"].train
+    datasize = train_data[0].shape[0]
+    if max_num_ip > train_data[0].shape[0]:
+        raise click.Abort(
+            f"Too many inducing points requested for data size {datasize}"
+        )
+
     model, update_fn = create_model_and_update_fn(
         common_ctx["model_class_fn"],
         common_ctx["dataset"].train,
@@ -174,6 +195,13 @@ def uniform(ctx: click.Context, max_num_ip: int, distance_type: DistanceType):
     clustering_type = "uniform"
     clustering_kwargs = {"max_points": max_num_ip}
 
+    train_data = common_ctx["dataset"].train
+    datasize = train_data[0].shape[0]
+    if max_num_ip > train_data[0].shape[0]:
+        raise click.Abort(
+            f"Too many inducing points requested for data size {datasize}"
+        )
+
     model, update_fn = create_model_and_update_fn(
         common_ctx["model_class_fn"],
         common_ctx["dataset"].train,
@@ -199,6 +227,13 @@ def uniform(ctx: click.Context, max_num_ip: int, distance_type: DistanceType):
 def greedy(ctx: click.Context, max_num_ip: int, distance_type: DistanceType):
     ctx_obj: Dict = ctx.obj
     common_ctx: Dict = ctx_obj["common_ctx"]
+
+    train_data = common_ctx["dataset"].train
+    datasize = train_data[0].shape[0]
+    if max_num_ip > train_data[0].shape[0]:
+        raise click.Abort(
+            f"Too many inducing points requested for data size {datasize}"
+        )
 
     clustering_type = "greedy"
     clustering_kwargs = {"max_points": max_num_ip}
