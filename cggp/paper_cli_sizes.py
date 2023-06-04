@@ -90,7 +90,7 @@ def main(
     dataset_fn: DatasetCallable = DatasetType().convert(dataset_name, None, None)
     dataset = dataset_fn(seed)
     size = dataset.train[0].shape[0]
-    new_size = np.ceil(size * data_fraction)
+    new_size = int(np.ceil(size * data_fraction))
     train_x = dataset.train[0][:new_size]
     train_y = dataset.train[1][:new_size]
 
