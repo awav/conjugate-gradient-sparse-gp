@@ -355,7 +355,7 @@
             "args": [
                 "-o",
                 "${workspaceFolder}/cggp/logs-default/uci/${input:dataset}",
-                "${workspaceFolder}/cggp/logs/uci/${input:dataset}/*/*/results.json",
+                "${workspaceFolder}/cggp/logs/uci-size/${input:dataset}/*/*/results.json",
             ],
         },
     ],
