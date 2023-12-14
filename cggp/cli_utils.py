@@ -1,7 +1,17 @@
 from functools import reduce
 from operator import iconcat
 import glob
-from typing import Literal, Callable, Optional, List, Optional, TypeVar, Dict, Sequence
+from typing import (
+    Literal,
+    Callable,
+    Optional,
+    List,
+    Optional,
+    TypeVar,
+    Dict,
+    Sequence,
+    Tuple,
+)
 from pathlib import Path
 import glob
 
@@ -17,7 +27,7 @@ from scipy.cluster.vq import kmeans2
 from optimize import (
     kmeans_update_inducing_parameters,
     covertree_update_inducing_parameters,
-    oips_update_inducing_parameters,
+    nearest_neighbors_update_inducing_parameters,
 )
 from data import load_data, DatasetBundle
 from utils import jit, transform_to_dataset
@@ -28,7 +38,9 @@ from conjugate_gradient import ConjugateGradient
 ModelClass = TypeVar("ModelClass", type(LpSVGP), type(ClusterGP))
 ModelClassStr = Literal["sgpr", "cdgp"]
 ModelClassCallable = Callable
-ClusteringType = Literal["kmeans", "kmeans2", "covertree", "oips", "uniform", "greedy"]
+ClusteringType = Literal[
+    "kmeans", "kmeans2", "covertree", "oips", "uniform", "greedy", "grad_ip"
+]
 DatasetCallable = Callable[[int], DatasetBundle]
 
 PrecisionName = Literal["fp32", "fp64"]
@@ -36,7 +48,10 @@ PrecisionDtype = Literal[np.float32, np.float64]
 DistanceChoices = click.Choice(DistanceType.__args__)
 ModelChoices = click.Choice(ModelClassStr.__args__)
 
-precision_names: Dict[PrecisionDtype, PrecisionName] = {np.float32: "fp32", np.float64: "fp64"}
+precision_names: Dict[PrecisionDtype, PrecisionName] = {
+    np.float32: "fp32",
+    np.float64: "fp64",
+}
 
 
 class FloatType(click.ParamType):
@@ -179,7 +194,9 @@ def create_gpr_model(
     default_variance = 0.1
 
     kernel = kernel_fn(dim)
-    model = gpflow.models.GPR(train_data, kernel, noise_variance=default_variance, **model_kwargs)
+    model = gpflow.models.GPR(
+        train_data, kernel, noise_variance=default_variance, **model_kwargs
+    )
 
     return model
 
@@ -198,11 +215,15 @@ def create_kmeans_update_fn(
     @jit(use_jit)
     def clustering_fn():
         iv_init = model.inducing_variable.Z
-        iv, _ = kmeans_lloyd(x, max_points, initial_centroids=iv_init, distance_fn=distance_fn)
+        iv, _ = kmeans_lloyd(
+            x, max_points, initial_centroids=iv_init, distance_fn=distance_fn
+        )
         return iv
 
     def update_fn():
-        return kmeans_update_inducing_parameters(model, data, distance_fn, clustering_fn)
+        return kmeans_update_inducing_parameters(
+            model, data, distance_fn, clustering_fn
+        )
 
     return update_fn
 
@@ -224,7 +245,9 @@ def create_kmeans2_update_fn(
         return tf.convert_to_tensor(iv, dtype=iv_init.dtype)
 
     def update_fn():
-        return kmeans_update_inducing_parameters(model, data, distance_fn, clustering_fn)
+        return kmeans_update_inducing_parameters(
+            model, data, distance_fn, clustering_fn
+        )
 
     return update_fn
 
@@ -245,7 +268,9 @@ def create_greedy_update_fn(
         return greedy_selection(kernel, inputs, max_points)
 
     def update_fn():
-        return oips_update_inducing_parameters(model, data, greedy_fn, distance_fn)
+        return nearest_neighbors_update_inducing_parameters(
+            model, data, greedy_fn, distance_fn
+        )
 
     return update_fn
 
@@ -261,7 +286,9 @@ def create_covertree_update_fn(
     distance_fn = jit(use_jit)(distance_fn)
 
     def update_fn():
-        return covertree_update_inducing_parameters(model, data, distance_fn, spatial_resolution)
+        return covertree_update_inducing_parameters(
+            model, data, distance_fn, spatial_resolution
+        )
 
     return update_fn
 
@@ -291,7 +318,60 @@ def create_oips_update_fn(
 
     @jit(use_jit)
     def update_fn():
-        return oips_update_inducing_parameters(model, data, oips_fn, distance_fn)
+        return nearest_neighbors_update_inducing_parameters(
+            model, data, oips_fn, distance_fn
+        )
+
+    return update_fn
+
+
+def create_grad_ip_update_fn(
+    model,
+    data,
+    use_jit: bool = True,
+    max_points: Optional[int] = None,
+    distance_type: DistanceType = "euclidean",
+    num_iterations: int = 1000,
+):
+    if max_points is None:
+        raise ValueError("Max points expected to be an integer")
+    if max_points > tf.shape(data[0])[0]:
+        raise ValueError("Max points cannot be larger the dataset size")
+
+    distance_fn = create_distance_fn(model.kernel, distance_type)
+    distance_fn = jit(use_jit)(distance_fn)
+
+    inputs = data[0]
+    ip_init, _ = uniform(inputs, max_points)
+    iv = tf.Variable(ip_init)
+
+    temp_model = gpflow.models.SGPR(
+        model.data,
+        kernel=model.kernel,
+        likelihood=model.likelihood,
+        inducing_variable=iv,
+    )
+
+    opt = gpflow.optimizers.Scipy()
+    loss_fn = temp_model.training_loss_closure(compile=False)
+    options = dict(maxiter=num_iterations)
+    train_variables = (iv,)
+
+    def train_inducing_variables():
+        opt.minimize(loss_fn, train_variables, compile=use_jit, options=options)
+
+    def inducing_points_fn(inputs: tf.Tensor) -> Tuple[tf.Tensor, tf.Tensor]:
+        return temp_model.inducing_variable.Z, None
+
+    @jit(use_jit)
+    def inducing_parameters():
+        return nearest_neighbors_update_inducing_parameters(
+            temp_model, data, inducing_points_fn, distance_fn
+        )
+
+    def update_fn():
+        train_inducing_variables()
+        return inducing_parameters()
 
     return update_fn
 
@@ -320,7 +400,9 @@ def create_uniform_update_fn(
 
     @jit(use_jit)
     def update_fn():
-        return oips_update_inducing_parameters(model, data, uniform_fn, distance_fn)
+        return nearest_neighbors_update_inducing_parameters(
+            model, data, uniform_fn, distance_fn
+        )
 
     return update_fn
 
@@ -335,27 +417,59 @@ def create_update_fn(
 ):
     if clustering_type == "kmeans":
         return create_kmeans_update_fn(
-            model, data, use_jit=use_jit, distance_type=distance_type, **clustering_kwargs
+            model,
+            data,
+            use_jit=use_jit,
+            distance_type=distance_type,
+            **clustering_kwargs,
         )
     elif clustering_type == "kmeans2":
         return create_kmeans2_update_fn(
-            model, data, use_jit=use_jit, distance_type=distance_type, **clustering_kwargs
+            model,
+            data,
+            use_jit=use_jit,
+            distance_type=distance_type,
+            **clustering_kwargs,
         )
     elif clustering_type == "covertree":
         return create_covertree_update_fn(
-            model, data, use_jit=use_jit, distance_type=distance_type, **clustering_kwargs
+            model,
+            data,
+            use_jit=use_jit,
+            distance_type=distance_type,
+            **clustering_kwargs,
         )
     elif clustering_type == "oips":
         return create_oips_update_fn(
-            model, data, use_jit=use_jit, distance_type=distance_type, **clustering_kwargs
+            model,
+            data,
+            use_jit=use_jit,
+            distance_type=distance_type,
+            **clustering_kwargs,
         )
     elif clustering_type == "uniform":
         return create_uniform_update_fn(
-            model, data, use_jit=use_jit, distance_type=distance_type, **clustering_kwargs
+            model,
+            data,
+            use_jit=use_jit,
+            distance_type=distance_type,
+            **clustering_kwargs,
         )
     elif clustering_type == "greedy":
         return create_greedy_update_fn(
-            model, data, use_jit=use_jit, distance_type=distance_type, **clustering_kwargs
+            model,
+            data,
+            use_jit=use_jit,
+            distance_type=distance_type,
+            **clustering_kwargs,
+        )
+    elif clustering_type == "grad_ip":
+        return create_grad_ip_update_fn(
+            model,
+            data,
+            use_jit=use_jit,
+            distance_type=distance_type,
+            **clustering_kwargs,
         )
     raise ValueError(f"Unknown value for {clustering_type}")
 
@@ -427,7 +541,7 @@ def batch_posterior_computation(predict_fn, data, batch_size):
     data = transform_to_dataset(data, repeat=False, batch_size=batch_size)
     means = []
     variances = []
-    for (x, y) in data:
+    for x, y in data:
         mean, variance = predict_fn(x)
         means.append(mean.numpy())
         variances.append(variance.numpy())

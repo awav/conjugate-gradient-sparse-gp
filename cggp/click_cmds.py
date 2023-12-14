@@ -1,14 +1,21 @@
 from typing import Dict
 import click
 
-from cli_utils import create_model_and_update_fn, DistanceChoices, DistanceType
+from cli_utils import (
+    create_model_and_update_fn,
+    DistanceChoices,
+    DistanceType,
+    ClusteringType,
+)
 
 
 @click.group("covertree")
 @click.option("-s", "--spatial-resolution", type=float, required=True)
 @click.option("-d", "--distance-type", type=DistanceChoices, default="euclidean")
 @click.pass_context
-def covertree(ctx: click.Context, spatial_resolution: float, distance_type: DistanceType):
+def covertree(
+    ctx: click.Context, spatial_resolution: float, distance_type: DistanceType
+):
     ctx_obj: Dict = ctx.obj
     common_ctx: Dict = ctx_obj["common_ctx"]
 
@@ -44,6 +51,13 @@ def kmeans(ctx: click.Context, max_num_ip: int, distance_type: DistanceType):
     clustering_type = "kmeans"
     clustering_kwargs = {"max_points": max_num_ip}
 
+    train_data = common_ctx["dataset"].train
+    datasize = train_data[0].shape[0]
+    if max_num_ip > train_data[0].shape[0]:
+        raise click.Abort(
+            f"Too many inducing points requested for data size {datasize}"
+        )
+
     model, update_fn = create_model_and_update_fn(
         common_ctx["model_class_fn"],
         common_ctx["dataset"].train,
@@ -72,6 +86,13 @@ def kmeans2(ctx: click.Context, max_num_ip: int, distance_type: DistanceType):
 
     clustering_type = "kmeans"
     clustering_kwargs = {"max_points": max_num_ip}
+
+    train_data = common_ctx["dataset"].train
+    datasize = train_data[0].shape[0]
+    if max_num_ip > train_data[0].shape[0]:
+        raise click.Abort(
+            f"Too many inducing points requested for data size {datasize}"
+        )
 
     model, update_fn = create_model_and_update_fn(
         common_ctx["model_class_fn"],
@@ -121,6 +142,48 @@ def oips(ctx: click.Context, rho: float, max_num_ip: int, distance_type: Distanc
     )
 
 
+@click.group("grad_ip")
+@click.option("-n", "--num-iterations", type=int, required=True, default=1000)
+@click.option("-m", "--max-num-ip", type=int)
+@click.option("-d", "--distance-type", type=DistanceChoices, default="euclidean")
+@click.pass_context
+def grad_ip(
+    ctx: click.Context,
+    num_iterations: int,
+    max_num_ip: int,
+    distance_type: DistanceType,
+):
+    ctx_obj: Dict = ctx.obj
+    common_ctx: Dict = ctx_obj["common_ctx"]
+
+    clustering_type: ClusteringType = "grad_ip"
+    clustering_kwargs = {"num_iterations": num_iterations, "max_points": max_num_ip}
+
+    train_data = common_ctx["dataset"].train
+    datasize = train_data[0].shape[0]
+    if max_num_ip > train_data[0].shape[0]:
+        raise click.Abort(
+            f"Too many inducing points requested for data size {datasize}"
+        )
+
+    model, update_fn = create_model_and_update_fn(
+        common_ctx["model_class_fn"],
+        common_ctx["dataset"].train,
+        clustering_type=clustering_type,
+        distance_type=distance_type,
+        use_jit=common_ctx["jit"],
+        clustering_kwargs=clustering_kwargs,
+    )
+
+    ctx_obj["ip_ctx"] = dict(
+        model=model,
+        update_fn=update_fn,
+        clustering_type=clustering_type,
+        clustering_kwargs=clustering_kwargs,
+        distance_type=distance_type,
+    )
+
+
 @click.group("uniform")
 @click.option("-m", "--max-num-ip", type=int, required=True)
 @click.option("-d", "--distance-type", type=DistanceChoices, default="euclidean")
@@ -131,6 +194,13 @@ def uniform(ctx: click.Context, max_num_ip: int, distance_type: DistanceType):
 
     clustering_type = "uniform"
     clustering_kwargs = {"max_points": max_num_ip}
+
+    train_data = common_ctx["dataset"].train
+    datasize = train_data[0].shape[0]
+    if max_num_ip > train_data[0].shape[0]:
+        raise click.Abort(
+            f"Too many inducing points requested for data size {datasize}"
+        )
 
     model, update_fn = create_model_and_update_fn(
         common_ctx["model_class_fn"],
@@ -157,6 +227,13 @@ def uniform(ctx: click.Context, max_num_ip: int, distance_type: DistanceType):
 def greedy(ctx: click.Context, max_num_ip: int, distance_type: DistanceType):
     ctx_obj: Dict = ctx.obj
     common_ctx: Dict = ctx_obj["common_ctx"]
+
+    train_data = common_ctx["dataset"].train
+    datasize = train_data[0].shape[0]
+    if max_num_ip > train_data[0].shape[0]:
+        raise click.Abort(
+            f"Too many inducing points requested for data size {datasize}"
+        )
 
     clustering_type = "greedy"
     clustering_kwargs = {"max_points": max_num_ip}

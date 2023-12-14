@@ -4,6 +4,7 @@ import click
 import tensorflow as tf
 import numpy as np
 import gpflow
+from data import DatasetBundle
 from utils import store_as_json, load_from_json, load_from_npy
 from pathlib import Path
 
@@ -41,6 +42,7 @@ def model_fn_choices(train_data, error_threshold: float = 1e-6):
 @click.option("-p", "--precision", type=FloatType(), required=True)
 @click.option("-j", "--jitter", type=float, required=True)
 @click.option("-c", "--config-dir", type=LogdirPath(mkdir=False))
+@click.option("-df", "--data-fraction", type=float, default=1.0)
 @click.option("--jit/--no-jit", type=bool, default=True)
 @click.pass_context
 def main(
@@ -48,6 +50,7 @@ def main(
     config_dir: Union[Path, str],
     model_class: ModelClassStr,
     precision: tf.DType,
+    data_fraction: float,
     jitter: float,
     jit: bool,
 ):
@@ -86,7 +89,15 @@ def main(
 
     dataset_fn: DatasetCallable = DatasetType().convert(dataset_name, None, None)
     dataset = dataset_fn(seed)
-    model_class_fn = model_fn_choices(dataset.train)[model_class]
+    size = dataset.train[0].shape[0]
+    new_size = int(np.ceil(size * data_fraction))
+    train_x = dataset.train[0][:new_size]
+    train_y = dataset.train[1][:new_size]
+
+    train_data = (train_x, train_y)
+    new_dataset = DatasetBundle(dataset.name, train_data, dataset.test)
+
+    model_class_fn = model_fn_choices(new_dataset.train)[model_class]
 
     common_ctx = dict(
         seed=seed,
@@ -96,10 +107,11 @@ def main(
         model_class_fn=model_class_fn,
         ref_info=ref_info,
         ref_params=ref_params,
-        dataset=dataset,
+        dataset=new_dataset,
         jitter=jitter,
         precision=precision_names[precision],
         jit=jit,
+        data_fraction=data_fraction,
     )
 
     ctx.obj = dict(common_ctx=common_ctx)
@@ -159,6 +171,7 @@ def compute_metrics(
         "config_dir": common_ctx["config_dir"],
         "clustering_type": ip_ctx["clustering_type"],
         "clustering_args": ip_ctx["clustering_kwargs"],
+        "data_fraction": common_ctx["data_fraction"],
         "num_inducing_points": m,
         "jitter": jitter,
     }

@@ -38,14 +38,14 @@ def covertree_update_inducing_parameters(
     return new_iv, means, counts
 
 
-def oips_update_inducing_parameters(
+def nearest_neighbors_update_inducing_parameters(
     model,
     data,
-    oips_fn,
+    subset_points_fn,
     distance_fn,
 ) -> Tuple[Tensor, Tensor, Tensor]:
     inputs, outputs = data
-    iv, iv_indices = oips_fn(inputs)
+    iv, iv_indices = subset_points_fn(inputs)
     m = tf.shape(iv)[0]
     cross_distances = ops.square_distance(iv, inputs)
     max_distance_indices = tf.argmin(cross_distances, axis=0)
@@ -271,7 +271,8 @@ def make_param_callback(model):
 
     def _callback(*args, **kwargs):
         ks = {
-            f"kernel/{k.strip('.')}": v.numpy() for (k, v) in parameter_dict(model.kernel).items()
+            f"kernel/{k.strip('.')}": v.numpy()
+            for (k, v) in parameter_dict(model.kernel).items()
         }
         ls = {
             f"likelihood/{k.strip('.')}": v.numpy()
@@ -284,7 +285,8 @@ def make_param_callback(model):
 
 def make_metrics_callback(
     model: Union[
-        gpflow.models.ExternalDataTrainingLossMixin, gpflow.models.InternalDataTrainingLossMixin
+        gpflow.models.ExternalDataTrainingLossMixin,
+        gpflow.models.InternalDataTrainingLossMixin,
     ],
     train_data,
     test_data,
@@ -351,13 +353,16 @@ def make_metrics_callback(
 
         if print_on:
             metrics_fmt = {
-                k: np.format_float_scientific(v, precision=4) for k, v in metrics.items()
+                k: np.format_float_scientific(v, precision=4)
+                for k, v in metrics.items()
             }
             metrics_str = json.dumps(metrics_fmt)
             click.echo(f"Step [{step}], metrics: {metrics_str}")
 
         if check_numerics:
-            tf.debugging.check_numerics(elbo, f"The training ELBO has got an undefined value {elbo}")
+            tf.debugging.check_numerics(
+                elbo, f"The training ELBO has got an undefined value {elbo}"
+            )
 
         return metrics
 
